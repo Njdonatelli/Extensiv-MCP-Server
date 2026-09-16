@@ -85,3 +85,54 @@ describe('createWmsMcpServer over a real MCP client', () => {
     expect(JSON.parse((r.contents[0] as { text: string }).text).policy.writesEnabled).toBe(false);
   });
 });
+
+describe('customer and facility references accept a name or an id', () => {
+  it('resolves an exact name, a differently-cased name and a unique partial', async () => {
+    const { client } = await connect({});
+    for (const ref of ['1', 'Acme', 'acme', 'Acm']) {
+      const res = (await client.callTool({ name: 'find_orders', arguments: { customer_id: ref } })) as { structuredContent: { orders: { customer: { id: string } }[] }; isError?: boolean };
+      expect(res.isError, `ref ${ref}`).toBeFalsy();
+      expect(res.structuredContent.orders.every((o) => o.customer.id === '1')).toBe(true);
+    }
+  });
+
+  it('resolves a facility name to its id', async () => {
+    const { client } = await connect({});
+    const res = (await client.callTool({ name: 'check_inventory', arguments: { customer_id: 'Acme', facility_id: 'LAX-1' } })) as { structuredContent: { facilityId: string }; isError?: boolean };
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent.facilityId).toBe('1');
+  });
+
+  it('reports NOT_FOUND with the visible customers for an unknown reference', async () => {
+    const { client } = await connect({});
+    const res = (await client.callTool({ name: 'find_orders', arguments: { customer_id: 'Globex' } })) as { structuredContent: { error: { code: string; details: { visibleCustomers: unknown[] } } }; isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent.error.code).toBe('NOT_FOUND');
+    expect(res.structuredContent.error.details.visibleCustomers).toHaveLength(2);
+  });
+
+  it('reports AMBIGUOUS when a partial name matches more than one customer', async () => {
+    const { client } = await connect({});
+    const res = (await client.callTool({ name: 'find_orders', arguments: { customer_id: 'c' } })) as { structuredContent: { error: { code: string } }; isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent.error.code).toBe('AMBIGUOUS');
+  });
+
+  it('still refuses a write when a NAME resolves to a customer outside write scope', async () => {
+    const { client, adapter } = await connect({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const res = (await client.callTool({
+      name: 'create_order',
+      arguments: { customer_id: 'Out Of Scope', facility_id: 'DFW-2', reference_num: 'X-1', ship_to: { name: 'Jo', address1: '1', city: 'c', state: 's', zip: 'z' }, lines: [{ sku: 'SKU-1', qty: 1 }] },
+    })) as { structuredContent: { error: { code: string } }; isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent.error.code).toBe('SCOPE_DENIED');
+    expect(adapter.executeCalls).toHaveLength(0);
+  });
+
+  it('refuses a read for a name outside the read allowlist', async () => {
+    const { client } = await connect({ EXTENSIV_MCP_ALLOWED_CUSTOMER_IDS: '1' });
+    const res = (await client.callTool({ name: 'find_orders', arguments: { customer_id: 'Out Of Scope' } })) as { structuredContent: { error: { code: string } }; isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent.error.code).toBe('SCOPE_DENIED');
+  });
+});

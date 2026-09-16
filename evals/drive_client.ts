@@ -27,8 +27,13 @@ interface Prompt {
 
 interface Selection {
   id: string;
+  /** First MCP tool the model called. */
   selected_tool: string | null;
   arguments?: unknown;
+  /** Every MCP tool called, in order. A real client may legitimately resolve a
+   *  customer name to an id before acting, so the first call alone understates
+   *  whether the model found the right tool for the task. */
+  trajectory: string[];
   writes_enabled: boolean;
   tools_offered: number;
   note?: string;
@@ -46,14 +51,16 @@ const model = flag('--model', 'claude-sonnet-5')!;
 const base = flag('--base', 'http://127.0.0.1:4010')!;
 const outFile = flag('--out', path.join(here, 'results', 'selections.json'))!;
 const only = flag('--only')?.split(',').map((s) => s.trim());
-const timeoutMs = Number(flag('--timeout-ms', '180000'));
+const timeoutMs = Number(flag('--timeout-ms', '300000'));
 
 const prompts = (JSON.parse(readFileSync(path.join(here, 'prompts.json'), 'utf8')) as Prompt[]).filter((p) => !only || only.includes(p.id));
 
-/** Mirrors the instructions the server itself advertises, so the eval measures tool choice, not prompt novelty. */
+/** Deliberately thin: the point of the eval is whether the SERVER's own tool
+ *  descriptions steer the model, so this adds role and urgency, not guidance
+ *  about which tool to pick. */
 const SYSTEM_EXTRA =
   'You are an operations assistant for a third-party logistics provider, working through the Extensiv MCP tools. ' +
-  'Call exactly one tool first, the one that best serves the request. Do not ask clarifying questions before calling a tool. ' +
+  'Use the tools to answer; do not ask the user a clarifying question before you have tried the tools. ' +
   'Never invent a tool that is not offered.';
 
 function mcpConfig(writesEnabled: boolean, stateDir: string): string {
@@ -99,7 +106,7 @@ async function runOne(p: Prompt): Promise<Selection> {
     '--allowedTools',
     'mcp__extensiv',
     '--max-turns',
-    '2',
+    '6',
   ];
   return new Promise<Selection>((resolve) => {
     const child = spawn('claude', args, { cwd: repo, env: { ...process.env }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -107,6 +114,7 @@ async function runOne(p: Prompt): Promise<Selection> {
     let stderr = '';
     let selected: string | null = null;
     let selectedInput: unknown;
+    const trajectory: string[] = [];
     let toolsOffered = 0;
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
     child.stdout.on('data', (d: Buffer) => {
@@ -125,12 +133,16 @@ async function runOne(p: Prompt): Promise<Selection> {
         if (ev.type === 'system' && Array.isArray(ev.tools)) {
           toolsOffered = ev.tools.filter((t) => t.startsWith('mcp__extensiv__')).length;
         }
-        if (selected === null && ev.type === 'assistant') {
+        if (ev.type === 'assistant') {
           for (const block of ev.message?.content ?? []) {
+            // ToolSearch and other client-side tools are not part of this server's surface.
             if (block.type === 'tool_use' && block.name?.startsWith('mcp__extensiv__')) {
-              selected = block.name.replace('mcp__extensiv__', '');
-              selectedInput = block.input;
-              break;
+              const name = block.name.replace('mcp__extensiv__', '');
+              trajectory.push(name);
+              if (selected === null) {
+                selected = name;
+                selectedInput = block.input;
+              }
             }
           }
         }
@@ -141,11 +153,12 @@ async function runOne(p: Prompt): Promise<Selection> {
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      process.stderr.write(`${p.id} [${writesEnabled ? 'writes' : 'read-only'}, ${toolsOffered} tools] -> ${selected ?? '(no tool)'}\n`);
+      process.stderr.write(`${p.id} [${writesEnabled ? 'writes' : 'read-only'}, ${toolsOffered} tools] -> ${trajectory.join(' > ') || '(no tool)'}\n`);
       resolve({
         id: p.id,
         selected_tool: selected,
         arguments: selectedInput,
+        trajectory,
         writes_enabled: writesEnabled,
         tools_offered: toolsOffered,
         ...(selected === null ? { note: `exit ${code}; stderr: ${stderr.slice(-400)}` } : {}),

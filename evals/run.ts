@@ -26,6 +26,9 @@ interface Selection {
   id: string;
   selected_tool: string | null;
   arguments?: unknown;
+  /** Every server tool called, in order; absent for selections recorded by a
+   *  single-shot runner that stops after the first call. */
+  trajectory?: string[];
   writes_enabled?: boolean;
   note?: string;
 }
@@ -72,19 +75,38 @@ async function live(): Promise<Selection[]> {
   return out;
 }
 
-function score(selections: Selection[]): { total: number; correct: number; accuracy: number; byCategory: Record<string, { total: number; correct: number }>; rows: { id: string; category: string; expected: string; selected: string | null; ok: boolean }[] } {
+function score(selections: Selection[]): {
+  total: number;
+  firstCorrect: number;
+  reachedCorrect: number;
+  byCategory: Record<string, { total: number; first: number; reached: number }>;
+  rows: { id: string; category: string; expected: string; selected: string | null; trajectory: string[]; firstOk: boolean; reachedOk: boolean }[];
+} {
   const byId = new Map(selections.map((s) => [s.id, s]));
-  const byCategory: Record<string, { total: number; correct: number }> = {};
+  const byCategory: Record<string, { total: number; first: number; reached: number }> = {};
   const rows = prompts.map((p) => {
-    const sel = byId.get(p.id)?.selected_tool ?? null;
-    const ok = sel !== null && (sel === p.expected_tool || (p.acceptable_tools ?? []).includes(sel));
-    byCategory[p.category] ??= { total: 0, correct: 0 };
+    const sel = byId.get(p.id);
+    const first = sel?.selected_tool ?? null;
+    const trajectory = sel?.trajectory ?? (first ? [first] : []);
+    const accepted = new Set([p.expected_tool, ...(p.acceptable_tools ?? [])]);
+    const firstOk = first !== null && accepted.has(first);
+    // A real MCP client may resolve a customer name to an id before acting, so
+    // reaching the expected tool at all is the task-level signal; the first call
+    // is the selection signal. Both are reported; neither is dropped.
+    const reachedOk = trajectory.some((t) => accepted.has(t));
+    byCategory[p.category] ??= { total: 0, first: 0, reached: 0 };
     byCategory[p.category]!.total += 1;
-    if (ok) byCategory[p.category]!.correct += 1;
-    return { id: p.id, category: p.category, expected: p.expected_tool, selected: sel, ok };
+    if (firstOk) byCategory[p.category]!.first += 1;
+    if (reachedOk) byCategory[p.category]!.reached += 1;
+    return { id: p.id, category: p.category, expected: p.expected_tool, selected: first, trajectory, firstOk, reachedOk };
   });
-  const correct = rows.filter((r) => r.ok).length;
-  return { total: rows.length, correct, accuracy: correct / rows.length, byCategory, rows };
+  return {
+    total: rows.length,
+    firstCorrect: rows.filter((r) => r.firstOk).length,
+    reachedCorrect: rows.filter((r) => r.reachedOk).length,
+    byCategory,
+    rows,
+  };
 }
 
 async function main(): Promise<void> {
@@ -100,17 +122,23 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   mkdirSync(path.join(here, 'results'), { recursive: true });
   const outFile = path.join(here, 'results', `${stamp}.json`);
-  writeFileSync(outFile, JSON.stringify({ source: from ?? 'live', model: from ? undefined : flag('--model') ?? 'claude-sonnet-5', ...result, selections }, null, 2));
+  writeFileSync(outFile, JSON.stringify({ source: from ?? 'live', model: from ? undefined : (flag('--model') ?? 'claude-sonnet-5'), ...result, selections }, null, 2));
+  const pct = (n: number): string => `${((n / result.total) * 100).toFixed(0)}%`;
   const lines = [
-    `Tool-selection accuracy: ${result.correct}/${result.total} (${(result.accuracy * 100).toFixed(0)}%)`,
-    ...Object.entries(result.byCategory).map(([c, v]) => `  ${c.padEnd(14)} ${v.correct}/${v.total}`),
+    `Tool selection  (first tool called):   ${result.firstCorrect}/${result.total} (${pct(result.firstCorrect)})`,
+    `Task reach      (expected tool used):  ${result.reachedCorrect}/${result.total} (${pct(result.reachedCorrect)})`,
     '',
-    ...result.rows.filter((r) => !r.ok).map((r) => `  MISS ${r.id} expected ${r.expected} got ${r.selected ?? '(none)'}`),
+    'category        first   reached',
+    ...Object.entries(result.byCategory).map(([c, v]) => `  ${c.padEnd(14)} ${String(v.first).padStart(2)}/${v.total}   ${String(v.reached).padStart(2)}/${v.total}`),
+    '',
+    ...result.rows.filter((r) => !r.reachedOk).map((r) => `  MISS   ${r.id} expected ${r.expected}, called: ${r.trajectory.join(' > ') || '(none)'}`),
+    ...result.rows.filter((r) => r.reachedOk && !r.firstOk).map((r) => `  LATE   ${r.id} expected ${r.expected} first, called: ${r.trajectory.join(' > ')}`),
+    '',
     `results: ${outFile}`,
   ];
   process.stdout.write(lines.join('\n') + '\n');
   const min = Number(flag('--min-accuracy') ?? '0');
-  if (result.accuracy < min) process.exit(1);
+  if (result.reachedCorrect / result.total < min) process.exit(1);
 }
 
 main().catch((e) => {

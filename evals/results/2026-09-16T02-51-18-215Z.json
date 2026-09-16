@@ -1,0 +1,278 @@
+{
+  "source": "/tmp/claude-0/-home-user-MCP-Server-Extensiv/3dbfeb9e-daba-58b3-9372-aedac340c9ed/scratchpad/smoke.json",
+  "total": 25,
+  "firstCorrect": 1,
+  "reachedCorrect": 1,
+  "byCategory": {
+    "read": {
+      "total": 14,
+      "first": 1,
+      "reached": 1
+    },
+    "write-prepare": {
+      "total": 5,
+      "first": 0,
+      "reached": 0
+    },
+    "commit": {
+      "total": 2,
+      "first": 0,
+      "reached": 0
+    },
+    "policy": {
+      "total": 2,
+      "first": 0,
+      "reached": 0
+    },
+    "ambiguous": {
+      "total": 2,
+      "first": 0,
+      "reached": 0
+    }
+  },
+  "rows": [
+    {
+      "id": "E01",
+      "category": "read",
+      "expected": "verify_connection",
+      "selected": "verify_connection",
+      "trajectory": [
+        "verify_connection"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E02",
+      "category": "read",
+      "expected": "describe_scope",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E03",
+      "category": "read",
+      "expected": "find_orders",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E04",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E05",
+      "category": "read",
+      "expected": "find_stuck_orders",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E06",
+      "category": "read",
+      "expected": "check_inventory",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E07",
+      "category": "read",
+      "expected": "lookup_item",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E08",
+      "category": "read",
+      "expected": "find_receipts",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E09",
+      "category": "read",
+      "expected": "get_receipt_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E10",
+      "category": "read",
+      "expected": "operations_summary",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E11",
+      "category": "read",
+      "expected": "recent_events",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E12",
+      "category": "write-prepare",
+      "expected": "create_order",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E13",
+      "category": "write-prepare",
+      "expected": "update_order",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E14",
+      "category": "write-prepare",
+      "expected": "cancel_order",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E15",
+      "category": "write-prepare",
+      "expected": "create_receipt",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E16",
+      "category": "commit",
+      "expected": "commit_change",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E17",
+      "category": "commit",
+      "expected": "commit_change",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E18",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E19",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E20",
+      "category": "read",
+      "expected": "get_receipt_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E21",
+      "category": "policy",
+      "expected": "get_order_status",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E22",
+      "category": "policy",
+      "expected": "find_receipts",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E23",
+      "category": "ambiguous",
+      "expected": "operations_summary",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E24",
+      "category": "ambiguous",
+      "expected": "recent_events",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E25",
+      "category": "write-prepare",
+      "expected": "create_order",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    }
+  ],
+  "selections": [
+    {
+      "id": "E01",
+      "selected_tool": "verify_connection",
+      "arguments": {},
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E12",
+      "selected_tool": null,
+      "writes_enabled": true,
+      "tools_offered": 16,
+      "note": "exit 1; stderr: "
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import * as z from 'zod/v4';
 import type { OrderSummary, ReceiptSummary } from '../domain.js';
 import { WmsError } from '../errors.js';
-import { common, defineTool, type ToolContext } from './define.js';
+import { common, defineTool, resolveCustomerRef, resolveFacilityRef, type ToolContext } from './define.js';
 
 const RO = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
@@ -11,22 +11,6 @@ function dayWindow(day: string | undefined, clock: ToolContext['clock']): { star
   const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
   const end = new Date(start.getTime() + 24 * 3600 * 1000);
   return { start: start.toISOString(), end: end.toISOString(), day: start.toISOString().slice(0, 10) };
-}
-
-async function resolveCustomerId(ctx: ToolContext, customerId: string | undefined, required: boolean): Promise<string | undefined> {
-  if (customerId !== undefined) {
-    ctx.policy.assertReadCustomer(customerId);
-    return customerId;
-  }
-  const scoped = ctx.policy.readCustomerFilter();
-  if (scoped && scoped.length === 1) return scoped[0];
-  if (!required) return undefined;
-  const customers = ctx.policy.filterCustomers(await ctx.adapter.listCustomers()).filter((c) => c.active);
-  if (customers.length === 1) return customers[0]!.id;
-  throw new WmsError('AMBIGUOUS', 'customer_id is required because this server can see more than one customer.', {
-    hint: 'Call describe_scope to list customers, then pass customer_id.',
-    details: { customers: customers.map((c) => ({ id: c.id, name: c.name })) },
-  });
 }
 
 export const verifyConnection = defineTool({
@@ -105,11 +89,11 @@ export const findOrders = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, false);
-    ctx.policy.assertReadFacility(input.facility_id);
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const page = await ctx.adapter.findOrders({
       customerId,
-      facilityId: input.facility_id,
+      facilityId,
       statuses: input.statuses,
       onHold: input.on_hold,
       referenceNum: input.reference_num,
@@ -143,7 +127,7 @@ export const getOrderStatus = defineTool({
     .refine((v) => v.order_id || v.reference_num, { message: 'order_id or reference_num is required' }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = input.customer_id ? await resolveCustomerId(ctx, input.customer_id, false) : undefined;
+    const customerId = input.customer_id ? await resolveCustomerRef(ctx, input.customer_id, false) : undefined;
     const order = await ctx.adapter.getOrder({ id: input.order_id, referenceNum: input.reference_num, customerId });
     if (!order) {
       throw new WmsError('NOT_FOUND', `No order found for ${input.order_id ? `id ${input.order_id}` : `reference ${input.reference_num}`}.`, {
@@ -169,9 +153,9 @@ export const findStuckOrders = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, false);
-    ctx.policy.assertReadFacility(input.facility_id);
-    const page = await ctx.adapter.findOrders({ customerId, facilityId: input.facility_id, statuses: ['open', 'complete'], limit: input.limit, page: 1 });
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const facilityId = await resolveFacilityRef(ctx, input.facility_id);
+    const page = await ctx.adapter.findOrders({ customerId, facilityId, statuses: ['open', 'complete'], limit: input.limit, page: 1 });
     const now = ctx.clock.now().getTime();
     const groups: Record<string, { order: OrderSummary; reason: string }[]> = { short: [], on_hold: [], aging: [], past_ship_date: [], in_progress_stalled: [] };
     for (const o of page.items) {
@@ -207,11 +191,11 @@ export const checkInventory = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, true);
-    ctx.policy.assertReadFacility(input.facility_id);
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, true);
+    const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const positions = await ctx.adapter.getInventory({
       customerId,
-      facilityId: input.facility_id,
+      facilityId,
       skus: input.skus,
       skuContains: input.sku_contains,
       includeLots: input.include_lots,
@@ -219,7 +203,7 @@ export const checkInventory = defineTool({
       limit: input.limit,
     });
     if (!input.low_stock_only) {
-      return { customerId, facilityId: input.facility_id, count: positions.length, positions };
+      return { customerId, facilityId, count: positions.length, positions };
     }
     const items = await ctx.adapter.findItems({ customerId, activeOnly: true, limit: 1000 });
     const reorder = new Map(items.map((i) => [i.sku, i.reorderPoint]));
@@ -232,7 +216,7 @@ export const checkInventory = defineTool({
       const threshold = reorder.get(item.sku) ?? input.threshold;
       if (threshold === undefined) continue;
       if (rows.length === 0) {
-        low.push({ sku: item.sku, facility: input.facility_id ?? 'any', available: 0, onHand: 0, reorderPoint: item.reorderPoint, threshold, deficit: threshold });
+        low.push({ sku: item.sku, facility: facilityId ?? 'any', available: 0, onHand: 0, reorderPoint: item.reorderPoint, threshold, deficit: threshold });
         continue;
       }
       for (const r of rows) {
@@ -240,7 +224,7 @@ export const checkInventory = defineTool({
       }
     }
     low.sort((a, b) => b.deficit - a.deficit);
-    return { customerId, facilityId: input.facility_id, lowStockCount: low.length, lowStock: low.slice(0, input.limit), rule: 'available <= reorderPoint (item master) or threshold (argument)' };
+    return { customerId, facilityId, lowStockCount: low.length, lowStock: low.slice(0, input.limit), rule: 'available <= reorderPoint (item master) or threshold (argument)' };
   },
 });
 
@@ -260,7 +244,7 @@ export const lookupItem = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, true);
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, true);
     const items = await ctx.adapter.findItems({ customerId, sku: input.sku, upc: input.upc, textSearch: input.text, activeOnly: input.active_only, limit: input.limit });
     return { customerId, count: items.length, items };
   },
@@ -288,11 +272,11 @@ export const findReceipts = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, false);
-    ctx.policy.assertReadFacility(input.facility_id);
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const page = await ctx.adapter.findReceipts({
       customerId,
-      facilityId: input.facility_id,
+      facilityId,
       statuses: input.statuses,
       referenceNum: input.reference_num,
       poNum: input.po_num,
@@ -322,7 +306,7 @@ export const getReceiptStatus = defineTool({
     .refine((v) => v.receipt_id || v.reference_num, { message: 'receipt_id or reference_num is required' }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = input.customer_id ? await resolveCustomerId(ctx, input.customer_id, false) : undefined;
+    const customerId = input.customer_id ? await resolveCustomerRef(ctx, input.customer_id, false) : undefined;
     const receipt = await ctx.adapter.getReceipt({ id: input.receipt_id, referenceNum: input.reference_num, customerId });
     if (!receipt) throw new WmsError('NOT_FOUND', `No receipt found for ${input.receipt_id ? `id ${input.receipt_id}` : `reference ${input.reference_num}`}.`, { hint: 'Try find_receipts with po_num or a date range.' });
     ctx.policy.assertReadCustomer(receipt.customer.id);
@@ -344,10 +328,10 @@ export const operationsSummary = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    const customerId = await resolveCustomerId(ctx, input.customer_id, false);
-    ctx.policy.assertReadFacility(input.facility_id);
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const win = dayWindow(input.day, ctx.clock);
-    const base = { customerId, facilityId: input.facility_id, limit: 500, page: 1 };
+    const base = { customerId, facilityId, limit: 500, page: 1 };
     const [created, shipped, open, receiptsExpected, receiptsOpen, receiptsClosed, events] = await Promise.all([
       ctx.adapter.findOrders({ ...base, createdAfter: win.start, createdBefore: win.end }),
       ctx.adapter.findOrders({ ...base, statuses: ['closed'], shippedAfter: win.start, shippedBefore: win.end }),
@@ -368,7 +352,7 @@ export const operationsSummary = defineTool({
       day: win.day,
       window: { start: win.start, end: win.end, note: 'UTC day boundaries' },
       customerId,
-      facilityId: input.facility_id,
+      facilityId,
       orders: {
         createdToday: readable(created).length,
         shippedToday: readable(shipped).length,
@@ -418,8 +402,8 @@ export const recentEvents = defineTool({
   }),
   annotations: RO,
   handler: async (input, ctx) => {
-    if (input.customer_id) ctx.policy.assertReadCustomer(input.customer_id);
-    const events = await ctx.events.query({ since: input.since, eventTypes: input.event_types, customerId: input.customer_id, referenceNum: input.reference_num, limit: input.limit });
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const events = await ctx.events.query({ since: input.since, eventTypes: input.event_types, customerId, referenceNum: input.reference_num, limit: input.limit });
     const visible = events.filter((e) => !e.customerId || ctx.policy.canReadCustomer(e.customerId));
     const unverified = visible.filter((e) => !e.verified).length;
     return { count: visible.length, unverifiedSignatures: unverified, eventsFile: ctx.config.eventsFile ?? `${ctx.config.stateDir}/events.jsonl`, events: visible.map(({ raw: _raw, ...e }) => e) };

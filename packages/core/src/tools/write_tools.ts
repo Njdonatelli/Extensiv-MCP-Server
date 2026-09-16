@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import { common, defineTool } from './define.js';
+import { common, defineTool, resolveCustomerRef, resolveFacilityRef } from './define.js';
 
 const PREP = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
@@ -45,12 +45,16 @@ export const createOrder = defineTool({
     idempotency_key: idem,
   }),
   annotations: PREP,
-  handler: async (input, ctx) =>
-    ctx.engine.prepare(
+  handler: async (input, ctx) => {
+    // Resolve a name to an id before the engine checks write scope, so an operator
+    // can say "Acme Outdoor Co" and still get a scope decision on the real id.
+    const customerId = (await resolveCustomerRef(ctx, input.customer_id, true))!;
+    const facilityId = (await resolveFacilityRef(ctx, input.facility_id))!;
+    return ctx.engine.prepare(
       'create_order',
       {
-        customerId: input.customer_id,
-        facilityId: input.facility_id,
+        customerId,
+        facilityId,
         referenceNum: input.reference_num,
         shipTo: input.ship_to,
         lines: input.lines,
@@ -61,7 +65,8 @@ export const createOrder = defineTool({
         notes: input.notes,
       },
       { idempotencyKey: input.idempotency_key },
-    ),
+    );
+  },
 });
 
 export const updateOrder = defineTool({
@@ -86,12 +91,13 @@ export const updateOrder = defineTool({
       message: 'at least one field to change is required',
     }),
   annotations: PREP,
-  handler: async (input, ctx) =>
-    ctx.engine.prepare(
+  handler: async (input, ctx) => {
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    return ctx.engine.prepare(
       'update_order',
       {
         orderId: input.order_id,
-        customerId: input.customer_id,
+        customerId,
         shipTo: input.ship_to,
         carrier: input.carrier,
         service: input.service,
@@ -100,7 +106,8 @@ export const updateOrder = defineTool({
         expectedVersion: input.expected_version,
       },
       { idempotencyKey: input.idempotency_key },
-    ),
+    );
+  },
 });
 
 export const cancelOrder = defineTool({
@@ -116,8 +123,10 @@ export const cancelOrder = defineTool({
     idempotency_key: idem,
   }),
   annotations: PREP,
-  handler: async (input, ctx) =>
-    ctx.engine.prepare('cancel_order', { orderId: input.order_id, customerId: input.customer_id, reason: input.reason }, { idempotencyKey: input.idempotency_key }),
+  handler: async (input, ctx) => {
+    const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    return ctx.engine.prepare('cancel_order', { orderId: input.order_id, customerId, reason: input.reason }, { idempotencyKey: input.idempotency_key });
+  },
 });
 
 const receiptLineSchema = z.object({
@@ -146,12 +155,14 @@ export const createReceipt = defineTool({
     idempotency_key: idem,
   }),
   annotations: PREP,
-  handler: async (input, ctx) =>
-    ctx.engine.prepare(
+  handler: async (input, ctx) => {
+    const customerId = (await resolveCustomerRef(ctx, input.customer_id, true))!;
+    const facilityId = (await resolveFacilityRef(ctx, input.facility_id))!;
+    return ctx.engine.prepare(
       'create_receipt',
       {
-        customerId: input.customer_id,
-        facilityId: input.facility_id,
+        customerId,
+        facilityId,
         referenceNum: input.reference_num,
         poNum: input.po_num,
         expectedDate: input.expected_date,
@@ -160,7 +171,8 @@ export const createReceipt = defineTool({
         notes: input.notes,
       },
       { idempotencyKey: input.idempotency_key },
-    ),
+    );
+  },
 });
 
 export const commitChange = defineTool({

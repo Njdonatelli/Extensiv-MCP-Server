@@ -1,0 +1,652 @@
+{
+  "source": "evals/results/selections.json",
+  "total": 25,
+  "firstCorrect": 11,
+  "reachedCorrect": 23,
+  "byCategory": {
+    "read": {
+      "total": 14,
+      "first": 8,
+      "reached": 14
+    },
+    "write-prepare": {
+      "total": 5,
+      "first": 0,
+      "reached": 4
+    },
+    "commit": {
+      "total": 2,
+      "first": 2,
+      "reached": 2
+    },
+    "policy": {
+      "total": 2,
+      "first": 1,
+      "reached": 1
+    },
+    "ambiguous": {
+      "total": 2,
+      "first": 0,
+      "reached": 2
+    }
+  },
+  "rows": [
+    {
+      "id": "E01",
+      "category": "read",
+      "expected": "verify_connection",
+      "selected": "verify_connection",
+      "trajectory": [
+        "verify_connection"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E02",
+      "category": "read",
+      "expected": "describe_scope",
+      "selected": "verify_connection",
+      "trajectory": [
+        "verify_connection",
+        "describe_scope"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E03",
+      "category": "read",
+      "expected": "find_orders",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "find_orders"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E04",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": "get_order_status",
+      "trajectory": [
+        "get_order_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E05",
+      "category": "read",
+      "expected": "find_stuck_orders",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "find_stuck_orders"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E06",
+      "category": "read",
+      "expected": "check_inventory",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "check_inventory"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E07",
+      "category": "read",
+      "expected": "lookup_item",
+      "selected": "lookup_item",
+      "trajectory": [
+        "lookup_item",
+        "lookup_item"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E08",
+      "category": "read",
+      "expected": "find_receipts",
+      "selected": "find_receipts",
+      "trajectory": [
+        "find_receipts",
+        "find_receipts",
+        "get_receipt_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E09",
+      "category": "read",
+      "expected": "get_receipt_status",
+      "selected": "get_receipt_status",
+      "trajectory": [
+        "get_receipt_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E10",
+      "category": "read",
+      "expected": "operations_summary",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "operations_summary",
+        "find_orders",
+        "find_orders",
+        "find_orders",
+        "find_orders",
+        "find_receipts"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E11",
+      "category": "read",
+      "expected": "recent_events",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "recent_events",
+        "recent_events"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E12",
+      "category": "write-prepare",
+      "expected": "create_order",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "lookup_item",
+        "lookup_item",
+        "lookup_item",
+        "lookup_item",
+        "create_order"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E13",
+      "category": "write-prepare",
+      "expected": "update_order",
+      "selected": "find_orders",
+      "trajectory": [
+        "find_orders",
+        "update_order"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E14",
+      "category": "write-prepare",
+      "expected": "cancel_order",
+      "selected": "get_order_status",
+      "trajectory": [
+        "get_order_status",
+        "cancel_order",
+        "commit_change"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E15",
+      "category": "write-prepare",
+      "expected": "create_receipt",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "verify_connection",
+        "lookup_item",
+        "lookup_item",
+        "create_receipt"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E16",
+      "category": "commit",
+      "expected": "commit_change",
+      "selected": "commit_change",
+      "trajectory": [
+        "commit_change"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E17",
+      "category": "commit",
+      "expected": "commit_change",
+      "selected": "commit_change",
+      "trajectory": [
+        "commit_change"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E18",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": "get_order_status",
+      "trajectory": [
+        "get_order_status",
+        "find_stuck_orders"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E19",
+      "category": "read",
+      "expected": "get_order_status",
+      "selected": "get_order_status",
+      "trajectory": [
+        "get_order_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E20",
+      "category": "read",
+      "expected": "get_receipt_status",
+      "selected": "get_receipt_status",
+      "trajectory": [
+        "get_receipt_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E21",
+      "category": "policy",
+      "expected": "get_order_status",
+      "selected": "get_order_status",
+      "trajectory": [
+        "get_order_status"
+      ],
+      "firstOk": true,
+      "reachedOk": true
+    },
+    {
+      "id": "E22",
+      "category": "policy",
+      "expected": "find_receipts",
+      "selected": null,
+      "trajectory": [],
+      "firstOk": false,
+      "reachedOk": false
+    },
+    {
+      "id": "E23",
+      "category": "ambiguous",
+      "expected": "operations_summary",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "operations_summary",
+        "find_stuck_orders"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E24",
+      "category": "ambiguous",
+      "expected": "recent_events",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope",
+        "recent_events",
+        "find_receipts",
+        "recent_events",
+        "find_receipts"
+      ],
+      "firstOk": false,
+      "reachedOk": true
+    },
+    {
+      "id": "E25",
+      "category": "write-prepare",
+      "expected": "create_order",
+      "selected": "describe_scope",
+      "trajectory": [
+        "describe_scope"
+      ],
+      "firstOk": false,
+      "reachedOk": false
+    }
+  ],
+  "selections": [
+    {
+      "id": "E01",
+      "selected_tool": "verify_connection",
+      "arguments": {},
+      "trajectory": [
+        "verify_connection"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E02",
+      "selected_tool": "verify_connection",
+      "arguments": {},
+      "trajectory": [
+        "verify_connection",
+        "describe_scope"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E03",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "find_orders"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E04",
+      "selected_tool": "get_order_status",
+      "arguments": {
+        "reference_num": "ACME-SO-10007"
+      },
+      "trajectory": [
+        "get_order_status"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E05",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "find_stuck_orders"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E06",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "check_inventory"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E07",
+      "selected_tool": "lookup_item",
+      "arguments": {
+        "sku": "ACME-FILTER-SQZ"
+      },
+      "trajectory": [
+        "lookup_item",
+        "lookup_item"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E08",
+      "selected_tool": "find_receipts",
+      "arguments": {
+        "po_num": "PO-ACME-2204"
+      },
+      "trajectory": [
+        "find_receipts",
+        "find_receipts",
+        "get_receipt_status"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E09",
+      "selected_tool": "get_receipt_status",
+      "arguments": {
+        "reference_num": "ACME-ASN-5003"
+      },
+      "trajectory": [
+        "get_receipt_status"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E10",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "operations_summary",
+        "find_orders",
+        "find_orders",
+        "find_orders",
+        "find_orders",
+        "find_receipts"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E11",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "recent_events",
+        "recent_events"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E12",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "lookup_item",
+        "lookup_item",
+        "lookup_item",
+        "lookup_item",
+        "create_order"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E13",
+      "selected_tool": "find_orders",
+      "arguments": {
+        "reference_num": "ACME-SO-10026"
+      },
+      "trajectory": [
+        "find_orders",
+        "update_order"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E14",
+      "selected_tool": "get_order_status",
+      "arguments": {
+        "reference_num": "ACME-SO-10021"
+      },
+      "trajectory": [
+        "get_order_status",
+        "cancel_order",
+        "commit_change"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E15",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "verify_connection",
+        "lookup_item",
+        "lookup_item",
+        "create_receipt"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E16",
+      "selected_tool": "commit_change",
+      "arguments": {
+        "change_id": "chg_k7m2p9q4r8t3v6w2",
+        "requested_by": "operator@example.com"
+      },
+      "trajectory": [
+        "commit_change"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E17",
+      "selected_tool": "commit_change",
+      "arguments": {
+        "change_id": "chg_n4r8s2t6v9w3x7y2",
+        "requested_by": "operator@example.com"
+      },
+      "trajectory": [
+        "commit_change"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E18",
+      "selected_tool": "get_order_status",
+      "arguments": {
+        "reference_num": "ACME-SO-10024"
+      },
+      "trajectory": [
+        "get_order_status",
+        "find_stuck_orders"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E19",
+      "selected_tool": "get_order_status",
+      "arguments": {
+        "reference_num": "ACME-SO-10023"
+      },
+      "trajectory": [
+        "get_order_status"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E20",
+      "selected_tool": "get_receipt_status",
+      "arguments": {
+        "reference_num": "ACME-ASN-5004"
+      },
+      "trajectory": [
+        "get_receipt_status"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    },
+    {
+      "id": "E21",
+      "selected_tool": "get_order_status",
+      "arguments": {
+        "reference_num": "ACME-SO-10022"
+      },
+      "trajectory": [
+        "get_order_status"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E22",
+      "selected_tool": null,
+      "trajectory": [],
+      "writes_enabled": false,
+      "tools_offered": 11,
+      "note": "exit 0; stderr: "
+    },
+    {
+      "id": "E23",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "operations_summary",
+        "find_stuck_orders"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E24",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope",
+        "recent_events",
+        "find_receipts",
+        "recent_events",
+        "find_receipts"
+      ],
+      "writes_enabled": false,
+      "tools_offered": 11
+    },
+    {
+      "id": "E25",
+      "selected_tool": "describe_scope",
+      "arguments": {},
+      "trajectory": [
+        "describe_scope"
+      ],
+      "writes_enabled": true,
+      "tools_offered": 16
+    }
+  ]
+}
