@@ -1,0 +1,43 @@
+{
+  "readOnly": {
+    "receiverId": 3001,
+    "receiverType": 2,
+    "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+    "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+    "creationDate": "2026-09-10T08:00:00Z",
+    "createdByIdentifier": { "name": "api-integration", "id": -1 },
+    "lastModifiedDate": "2026-09-13T08:15:00Z",
+    "status": 0,
+    "chargesPending": false
+  },
+  "referenceNum": "ASN-3001",
+  "poNum": "PO-88",
+  "arrivalDate": null,
+  "expectedDate": "2026-09-18T00:00:00Z",
+  "notes": "Two pallets, lift gate required",
+  "carrier": "Old Dominion",
+  "trackingNumber": "OD-55512",
+  "_embedded": {
+    "http://api.3plCentral.com/rels/inventory/receiveritem": [
+      {
+        "readOnly": { "receiveItemId": 8001, "expectedQty": 100, "inventoryLevels": { "onHand": 0, "available": 0 }, "rowVersion": "AAAAAAAAC1U=" },
+        "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 },
+        "qualifier": "",
+        "qty": 96,
+        "lotNumber": "L-90",
+        "expirationDate": "2027-06-30T00:00:00Z",
+        "cost": 3.25,
+        "locationInfo": { "locationId": 42, "display": "RCV-DOCK" },
+        "onHold": false
+      },
+      {
+        "readOnly": { "receiveItemId": 8002, "expectedQty": 50, "inventoryLevels": { "onHand": 0, "available": 0 } },
+        "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 },
+        "qty": 50,
+        "locationInfo": { "locationId": 42, "display": "RCV-DOCK" },
+        "onHold": false
+      }
+    ]
+  },
+  "_links": { "self": { "href": "/inventory/receivers/3001" } }
+}

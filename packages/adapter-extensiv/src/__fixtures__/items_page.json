@@ -1,0 +1,48 @@
+{
+  "totalResults": 3,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/customers/item": [
+      {
+        "readOnly": { "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 }, "itemId": 501, "creationDate": "2025-01-05T00:00:00Z", "lastModifiedDate": "2026-08-01T00:00:00Z", "deactivated": false, "rowVersion": "AAAAAAAAA1U=" },
+        "itemId": 501,
+        "sku": "WIDGET-BLUE",
+        "upc": "0001112223334",
+        "description": "Blue widget, 6 inch",
+        "inventoryCategory": "Hardware",
+        "cost": 3.25,
+        "price": 9.99,
+        "options": {
+          "inventoryUnit": {
+            "unitIdentifier": { "name": "Each", "id": 1 },
+            "minimumStock": 25,
+            "maximumStock": 500,
+            "reorderQuantity": 40,
+            "inventoryMethod": 1,
+            "imperial": { "netWeight": 1.1, "length": 6, "width": 3, "height": 2, "weight": 1.4 },
+            "metric": { "netWeight": 0.5, "length": 15.2, "width": 7.6, "height": 5.1, "weight": 0.64 }
+          },
+          "trackBys": { "trackLotNumber": 2, "trackSerialNumber": 0, "trackExpirationDate": 1, "trackCost": 0 }
+        },
+        "tags": ["fast-mover"]
+      },
+      {
+        "readOnly": { "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 }, "itemId": 502, "creationDate": "2025-01-05T00:00:00Z", "deactivated": false },
+        "itemId": 502,
+        "sku": "WIDGET-RED",
+        "upc": null,
+        "description": "Red widget, 6 inch",
+        "options": {
+          "inventoryUnit": { "unitIdentifier": { "name": "Case", "id": 2 }, "minimumStock": 12, "reorderQuantity": null, "imperial": { "netWeight": null, "length": null, "width": null, "height": null, "weight": 9 } },
+          "trackBys": { "trackLotNumber": 0, "trackSerialNumber": 0, "trackExpirationDate": 0, "trackCost": 0 }
+        }
+      },
+      {
+        "readOnly": { "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 }, "itemId": 503, "creationDate": "2024-03-05T00:00:00Z", "deactivated": true },
+        "itemId": 503,
+        "sku": "WIDGET-LEGACY",
+        "description": "Discontinued widget",
+        "options": { "inventoryUnit": { "unitIdentifier": { "name": "Each", "id": 1 } }, "trackBys": { "trackLotNumber": 0 } }
+      }
+    ]
+  }
+}

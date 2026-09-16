@@ -1,0 +1,18 @@
+{
+  "totalResults": 2,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/properties/facility": [
+      {
+        "facilityId": 10,
+        "name": "LAX-1",
+        "deactivated": false,
+        "code": "LAX1",
+        "timeZoneName": "Pacific Standard Time",
+        "shippingZip": "90001",
+        "contact": { "companyName": "Acme 3PL LAX", "name": "Warehouse Office", "address1": "100 Dock St", "city": "Los Angeles", "state": "CA", "zip": "90001", "country": "US", "phoneNumber": "310-555-0199" },
+        "lastCloseDate": "2026-09-15T00:00:00Z"
+      },
+      { "facilityId": 11, "name": "DFW-2", "deactivated": false, "code": "DFW2", "timeZoneName": "Central Standard Time", "shippingZip": "75201", "contact": null }
+    ]
+  }
+}

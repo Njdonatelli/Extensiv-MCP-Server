@@ -1,0 +1,21 @@
+{
+  "totalResults": 2,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/customers/customer": [
+      {
+        "readOnly": { "customerId": 143, "creationDate": "2024-02-01T00:00:00Z", "deactivated": false },
+        "companyInfo": { "companyName": "Acme Distribution", "name": "Acme Distribution", "address1": "1 Acme Way", "city": "Los Angeles", "state": "CA", "zip": "90001", "country": "US", "phoneNumber": "310-555-0100", "emailAddress": "ops@acme.example" },
+        "externalId": "ACME",
+        "facilities": [{ "name": "LAX-1", "id": 10 }, { "name": "DFW-2", "id": 11 }],
+        "primaryFacilityIdentifier": { "name": "LAX-1", "id": 10 }
+      },
+      {
+        "readOnly": { "customerId": 144, "creationDate": "2025-06-01T00:00:00Z", "deactivated": true },
+        "companyInfo": { "companyName": "Old Client LLC", "name": "Old Client LLC", "city": "Dallas", "state": "TX", "zip": "75201", "country": "US" },
+        "externalId": null,
+        "facilities": [{ "name": "DFW-2", "id": 11 }],
+        "primaryFacilityIdentifier": { "name": "DFW-2", "id": 11 }
+      }
+    ]
+  }
+}

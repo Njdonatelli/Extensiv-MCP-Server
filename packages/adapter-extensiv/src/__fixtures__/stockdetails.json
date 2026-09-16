@@ -1,0 +1,44 @@
+{
+  "totalResults": 2,
+  "_embedded": {
+    "item": [
+      {
+        "receiveItemId": 7001,
+        "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 },
+        "description": "Blue widget, 6 inch",
+        "upc": "0001112223334",
+        "qualifier": "",
+        "received": 150,
+        "available": 94,
+        "isOnHold": false,
+        "quarantined": false,
+        "onHand": 120,
+        "lotNumber": "L-77",
+        "serialNumber": null,
+        "expirationDate": "2027-03-31T00:00:00Z",
+        "cost": 3.25,
+        "locationIdentifier": { "nameKey": { "facilityIdentifier": { "name": "LAX-1", "id": 10 }, "name": "A-01-02" }, "id": 51 },
+        "receiverId": 3002,
+        "receivedDate": "2026-08-20T10:00:00Z",
+        "referenceNum": "RCV-2900",
+        "poNum": null
+      },
+      {
+        "receiveItemId": 7005,
+        "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 },
+        "description": "Blue widget, 6 inch",
+        "qualifier": "",
+        "received": 80,
+        "available": 80,
+        "isOnHold": true,
+        "quarantined": false,
+        "onHand": 80,
+        "lotNumber": "L-90",
+        "expirationDate": "2027-06-30T00:00:00Z",
+        "locationIdentifier": { "nameKey": { "facilityIdentifier": { "name": "LAX-1", "id": 10 }, "name": "QC-HOLD" }, "id": 52 },
+        "receiverId": 3001,
+        "receivedDate": "2026-09-02T14:00:00Z"
+      }
+    ]
+  }
+}

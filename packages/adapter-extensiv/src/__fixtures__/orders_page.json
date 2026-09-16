@@ -1,0 +1,52 @@
+{
+  "totalResults": 2,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/orders/order": [
+      {
+        "readOnly": {
+          "orderId": 1001,
+          "fullyAllocated": false,
+          "isClosed": false,
+          "packages": [],
+          "onHoldDate": "2026-09-12T16:00:00Z",
+          "onHoldReason": "Credit hold",
+          "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+          "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+          "creationDate": "2026-09-11T18:30:00Z",
+          "lastModifiedDate": "2026-09-12T16:00:05Z",
+          "status": 0
+        },
+        "referenceNum": "PO-1001",
+        "poNum": "4500123",
+        "numUnits1": 30,
+        "routingInfo": { "carrier": "FedEx", "mode": "Ground" },
+        "shipTo": { "name": "Dana Receiver", "companyName": "Widgets R Us", "city": "San Francisco", "state": "CA" },
+        "_embedded": {
+          "http://api.3plCentral.com/rels/orders/item": [
+            { "readOnly": { "orderItemId": 90001 }, "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 }, "qty": 10 },
+            { "readOnly": { "orderItemId": 90002 }, "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 }, "qty": 20 }
+          ]
+        }
+      },
+      {
+        "readOnly": {
+          "orderId": 1002,
+          "fullyAllocated": true,
+          "isClosed": true,
+          "shipDate": "2026-09-09T22:00:00Z",
+          "packages": [{ "packageId": 55001, "trackingNumber": "1Z999AA10123456784" }],
+          "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+          "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+          "creationDate": "2026-09-08T10:00:00Z",
+          "status": 1
+        },
+        "referenceNum": "PO-1002",
+        "numUnits1": 4,
+        "routingInfo": { "carrier": "UPS", "mode": "Ground", "trackingNumber": "1Z999AA10123456784" },
+        "shipTo": { "name": "Sam Buyer", "city": "Reno", "state": "NV" },
+        "_embedded": { "http://api.3plCentral.com/rels/orders/item": [{ "readOnly": { "orderItemId": 90101 }, "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 }, "qty": 4 }] }
+      }
+    ]
+  },
+  "_links": { "self": { "href": "/orders?pgsiz=100&pgnum=1" } }
+}

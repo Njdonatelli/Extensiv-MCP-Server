@@ -1,0 +1,18 @@
+{
+  "readOnly": {
+    "orderId": 1003,
+    "fullyAllocated": false,
+    "isClosed": false,
+    "packages": [],
+    "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+    "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+    "creationDate": "2026-09-05T09:00:00Z",
+    "lastModifiedDate": "2026-09-06T09:00:00Z",
+    "status": 2
+  },
+  "referenceNum": "PO-1003",
+  "numUnits1": 2,
+  "shipTo": { "name": "Nobody", "city": "Tulsa", "state": "OK", "zip": "74103", "country": "US" },
+  "_embedded": { "http://api.3plCentral.com/rels/orders/item": [{ "readOnly": { "orderItemId": 90201 }, "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 }, "qty": 2 }] },
+  "_links": { "self": { "href": "/orders/1003" } }
+}

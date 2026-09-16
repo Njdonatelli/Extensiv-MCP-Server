@@ -1,0 +1,28 @@
+{
+  "totalResults": 2,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/inventory/receiver": [
+      {
+        "readOnly": { "receiverId": 3001, "receiverType": 2, "customerIdentifier": { "name": "Acme Distribution", "id": 143 }, "facilityIdentifier": { "name": "LAX-1", "id": 10 }, "creationDate": "2026-09-10T08:00:00Z", "lastModifiedDate": "2026-09-13T08:15:00Z", "status": 0 },
+        "referenceNum": "ASN-3001",
+        "poNum": "PO-88",
+        "expectedDate": "2026-09-18T00:00:00Z",
+        "carrier": "Old Dominion",
+        "trackingNumber": "OD-55512",
+        "_embedded": {
+          "http://api.3plCentral.com/rels/inventory/receiveritem": [
+            { "readOnly": { "receiveItemId": 8001, "expectedQty": 100 }, "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 }, "qty": 96 },
+            { "readOnly": { "receiveItemId": 8002, "expectedQty": 50 }, "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 }, "qty": 50 }
+          ]
+        }
+      },
+      {
+        "readOnly": { "receiverId": 3002, "receiverType": 0, "customerIdentifier": { "name": "Acme Distribution", "id": 143 }, "facilityIdentifier": { "name": "LAX-1", "id": 10 }, "creationDate": "2026-09-01T08:00:00Z", "lastModifiedDate": "2026-09-02T17:30:00Z", "status": 1 },
+        "referenceNum": "RCV-3002",
+        "arrivalDate": "2026-09-02T14:00:00Z",
+        "expectedDate": "2026-09-02T00:00:00Z",
+        "_embedded": { "http://api.3plCentral.com/rels/inventory/receiveritem": [{ "readOnly": { "receiveItemId": 8010, "expectedQty": null }, "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 }, "qty": 200 }] }
+      }
+    ]
+  }
+}

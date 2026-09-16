@@ -1,0 +1,50 @@
+{
+  "readOnly": {
+    "orderId": 1002,
+    "fullyAllocated": true,
+    "isClosed": true,
+    "pickStarted": "2026-09-09T14:00:00Z",
+    "pickDoneDate": "2026-09-09T15:00:00Z",
+    "packStarted": "2026-09-09T15:10:00Z",
+    "packDoneDate": "2026-09-09T15:40:00Z",
+    "smallParcelShipDate": "2026-09-09T22:05:00Z",
+    "shipDate": "2026-09-09T22:00:00Z",
+    "onHoldDate": null,
+    "onHoldReason": null,
+    "packages": [
+      {
+        "packageId": 55001,
+        "length": 12,
+        "width": 10,
+        "height": 8,
+        "weight": 14.5,
+        "trackingNumber": "1Z999AA10123456784",
+        "description": "Box 1",
+        "createDate": "2026-09-09T15:30:00Z",
+        "packageContents": [{ "packageContentId": 1, "orderItemId": 90101, "qty": 4, "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 } }]
+      }
+    ],
+    "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+    "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+    "creationDate": "2026-09-08T10:00:00Z",
+    "lastModifiedDate": "2026-09-09T22:00:10Z",
+    "status": 1,
+    "chargesPending": false
+  },
+  "referenceNum": "PO-1002",
+  "poNum": "4500124",
+  "numUnits1": 4,
+  "routingInfo": { "carrier": "UPS", "mode": "Ground", "trackingNumber": "1Z999AA10123456784" },
+  "shipTo": { "companyName": "Gizmo Corp", "name": "Sam Buyer", "address1": "9 Elm Rd", "city": "Reno", "state": "NV", "zip": "89501", "country": "US" },
+  "parcelResponse": { "orderId": 1002, "trackingNumbers": ["1Z999AA10123456784", "1Z999AA10123456791"], "returnTrackingNumbers": [] },
+  "_embedded": {
+    "http://api.3plCentral.com/rels/orders/item": [
+      {
+        "readOnly": { "orderItemId": 90101, "fullyAllocated": true, "unitIdentifier": { "name": "Each", "id": 1 }, "allocations": [{ "receiveItemId": 7003, "qty": 4 }] },
+        "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 },
+        "qty": 4
+      }
+    ]
+  },
+  "_links": { "self": { "href": "/orders/1002" } }
+}

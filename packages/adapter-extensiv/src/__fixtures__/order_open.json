@@ -1,0 +1,81 @@
+{
+  "readOnly": {
+    "orderId": 1001,
+    "fullyAllocated": false,
+    "isClosed": false,
+    "processDate": null,
+    "pickStarted": "2026-09-12T15:04:00Z",
+    "pickDoneDate": null,
+    "packStarted": null,
+    "packDoneDate": null,
+    "asnSentDate": null,
+    "batchIdentifier": null,
+    "smallParcelShipDate": null,
+    "packages": [],
+    "shipDate": null,
+    "onHoldDate": "2026-09-12T16:00:00Z",
+    "onHoldReason": "Credit hold",
+    "customerIdentifier": { "externalId": "ACME", "name": "Acme Distribution", "id": 143 },
+    "facilityIdentifier": { "name": "LAX-1", "id": 10 },
+    "warehouseTransactionSourceType": 7,
+    "creationDate": "2026-09-11T18:30:00Z",
+    "createdByIdentifier": { "name": "api-integration", "id": -1 },
+    "lastModifiedDate": "2026-09-12T16:00:05Z",
+    "lastModifiedByIdentifier": { "name": "api-integration", "id": -1 },
+    "status": 0,
+    "chargesPending": false
+  },
+  "referenceNum": "PO-1001",
+  "poNum": "4500123",
+  "earliestShipDate": "2026-09-15T00:00:00Z",
+  "notes": "Deliver to dock 4",
+  "numUnits1": 30,
+  "routingInfo": { "carrier": "FedEx", "mode": "Ground", "scacCode": null, "trackingNumber": null },
+  "shipTo": {
+    "companyName": "Widgets R Us",
+    "name": "Dana Receiver",
+    "address1": "500 Market St",
+    "address2": null,
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94105",
+    "country": "US",
+    "phoneNumber": "415-555-0101",
+    "emailAddress": "dock@widgets.example"
+  },
+  "billTo": { "companyName": "Widgets R Us", "name": "AP Dept", "address1": "500 Market St", "city": "San Francisco", "state": "CA", "zip": "94105", "country": "US" },
+  "parcelResponse": null,
+  "_embedded": {
+    "http://api.3plCentral.com/rels/orders/item": [
+      {
+        "readOnly": {
+          "orderItemId": 90001,
+          "fullyAllocated": false,
+          "unitIdentifier": { "name": "Each", "id": 1 },
+          "allocations": [{ "receiveItemId": 7001, "qty": 6, "detail": { "itemTraits": { "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 }, "lotNumber": "L-77" } } }],
+          "rowVersion": "AAAAAAAAB9E="
+        },
+        "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 },
+        "qualifier": "",
+        "qty": 10,
+        "lotNumber": null,
+        "expirationDate": null
+      },
+      {
+        "readOnly": {
+          "orderItemId": 90002,
+          "fullyAllocated": true,
+          "unitIdentifier": { "name": "Each", "id": 1 },
+          "allocations": [{ "receiveItemId": 7002, "qty": 20 }],
+          "rowVersion": "AAAAAAAAB9I="
+        },
+        "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 },
+        "qualifier": "",
+        "qty": 20,
+        "lotNumber": null,
+        "expirationDate": "2027-01-31T00:00:00Z"
+      }
+    ]
+  },
+  "_links": { "self": { "href": "/orders/1001" } }
+}

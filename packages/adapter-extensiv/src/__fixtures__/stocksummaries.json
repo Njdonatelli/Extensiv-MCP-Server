@@ -1,0 +1,8 @@
+{
+  "totalResults": 3,
+  "summaries": [
+    { "itemIdentifier": { "sku": "WIDGET-BLUE", "id": 501 }, "qualifier": "", "totalReceived": 300, "allocated": 26, "available": 174, "onHold": 0, "onHand": 200, "orderedNotAllocated": 4, "facilityId": 10 },
+    { "itemIdentifier": { "sku": "WIDGET-RED", "id": 502 }, "qualifier": "", "totalReceived": 250, "allocated": 20, "available": 180, "onHold": 0, "onHand": 200, "orderedNotAllocated": 0, "facilityId": 10 },
+    { "itemIdentifier": { "sku": "WIDGET-GONE", "id": 504 }, "qualifier": "", "totalReceived": 10, "allocated": 0, "available": 0, "onHold": 0, "onHand": 0, "orderedNotAllocated": 0, "facilityId": 10 }
+  ]
+}
