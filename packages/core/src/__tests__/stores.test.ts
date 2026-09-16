@@ -33,6 +33,23 @@ describe('JsonlChangeStore', () => {
     expect((await b.list()).map((r) => r.id)).toEqual(['chg_a', 'chg_b']);
     expect(await b.findByFingerprint('fp-chg_b')).toBeDefined();
   });
+
+  it('sees records appended by another instance of the same file', async () => {
+    // Two MCP sessions, or two server processes, share one changes.jsonl. A store that
+    // read the file once at startup would answer CHANGE_UNKNOWN for a change the other
+    // one prepared.
+    const dir = mkdtempSync(path.join(tmpdir(), 'chg-share-'));
+    const file = path.join(dir, 'changes.jsonl');
+    const a = new JsonlChangeStore(file);
+    const b = new JsonlChangeStore(file);
+    await a.put(rec('chg_one'));
+    expect(await b.get('chg_one')).toBeDefined();
+    await b.put(rec('chg_two'));
+    expect(await a.get('chg_two')).toBeDefined();
+    await a.put({ ...rec('chg_one'), status: 'committed' });
+    expect((await b.get('chg_one'))?.status).toBe('committed');
+    expect((await b.list()).map((r) => r.id).sort()).toEqual(['chg_one', 'chg_two']);
+  });
 });
 
 describe('JsonlEventStore', () => {

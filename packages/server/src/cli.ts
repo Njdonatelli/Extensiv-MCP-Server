@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createLogger, redact, CORE_ENV_KEYS } from '@mcp-3pl/core';
 import { EXTENSIV_ENV_KEYS } from '@mcp-3pl/adapter-extensiv';
-import { buildServer, loadConfigs } from './build.js';
+import { buildServer, loadConfigs, sharedStateFor } from './build.js';
 import { runHttp, runStdio } from './transports.js';
 
 const args = new Set(process.argv.slice(2));
@@ -35,7 +35,12 @@ if (args.has('--print-config')) {
   process.exit(0);
 }
 
-const built = buildServer();
+// One set of stores for the whole process: every HTTP session must see the same
+// prepared changes, audit log and event file, or a change prepared in one session
+// would be unknown to the next.
+const { coreConfig } = loadConfigs();
+const shared = sharedStateFor(coreConfig);
+const built = buildServer({ shared });
 const logger = createLogger(built.coreConfig.logLevel, { component: 'extensiv-mcp-cli' });
 
 if (args.has('--check')) {
@@ -47,7 +52,7 @@ if (args.has('--check')) {
 }
 
 if (built.coreConfig.transport === 'http') {
-  const running = await runHttp(() => buildServer({ shared: undefined, adapter: built.ctx.adapter }), { host: built.coreConfig.httpHost, port: built.coreConfig.httpPort, logger });
+  const running = await runHttp(() => buildServer({ shared, adapter: built.ctx.adapter }), { host: built.coreConfig.httpHost, port: built.coreConfig.httpPort, logger });
   const stop = async () => {
     await running.close();
     process.exit(0);

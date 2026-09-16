@@ -335,7 +335,7 @@ export const operationsSummary = defineTool({
   name: 'operations_summary',
   title: 'Operations summary',
   description:
-    'A one-call daily snapshot for a customer and/or facility on a given day (default today, UTC): orders created, shipped, cancelled and currently on hold; open order backlog and how many are short; receipts expected that day, overdue, and closed that day; count of recent webhook events. Use it for "how are we doing today", "morning status", "end of day recap". For the list behind any number, use find_orders / find_receipts / find_stuck_orders.',
+    'A one-call daily snapshot for a customer and/or facility on a given day (default today, UTC): orders created and shipped that day, orders both created and cancelled that day, and how many open orders are on hold, short or past their ship date; receipts expected that day, overdue, and closed that day; count of recent webhook events. Every response carries a `caveats` list naming any count the upstream API cannot compute exactly; repeat those caveats to the operator rather than presenting the numbers as exact. Use it for "how are we doing today", "morning status", "end of day recap". For the list behind any number, use find_orders / find_receipts / find_stuck_orders.',
   kind: 'read',
   inputSchema: z.object({
     customer_id: common.customerId.optional(),
@@ -359,7 +359,9 @@ export const operationsSummary = defineTool({
     ]);
     const readable = <T extends { customer: { id: string } }>(p: { items: T[] }) => p.items.filter((x) => ctx.policy.canReadCustomer(x.customer.id));
     const openOrders = readable(open);
-    const cancelledToday = readable(created).filter((o) => o.status === 'cancelled');
+    // Only orders BOTH created and cancelled inside the window can be counted: the upstream
+    // API exposes no cancellation date to filter on. Said plainly in `caveats` below.
+    const cancelledCreatedToday = readable(created).filter((o) => o.status === 'cancelled');
     const overdueReceipts = readable(receiptsOpen).filter((r: ReceiptSummary) => r.expectedDate && r.expectedDate < win.start);
     const closedToday = readable(receiptsClosed).filter((r: ReceiptSummary) => r.closedAt && r.closedAt >= win.start && r.closedAt < win.end);
     return {
@@ -370,7 +372,7 @@ export const operationsSummary = defineTool({
       orders: {
         createdToday: readable(created).length,
         shippedToday: readable(shipped).length,
-        cancelledToday: cancelledToday.length,
+        cancelledCreatedToday: cancelledCreatedToday.length,
         openBacklog: open.total,
         openOnHold: openOrders.filter((o) => o.onHold).length,
         openShort: openOrders.filter((o) => o.fullyAllocated === false).length,
@@ -385,6 +387,7 @@ export const operationsSummary = defineTool({
       events: { sinceStartOfDay: events.length, byType: countBy(events.map((e) => e.eventType)) },
       truncation: { openOrdersScanned: openOrders.length, openOrdersTotal: open.total, closedReceiptsScanned: receiptsClosed.items.length, closedReceiptsTotal: receiptsClosed.total },
       caveats: [
+        'orders.cancelledCreatedToday counts only orders created AND cancelled within the window; the upstream API has no cancellation-date filter, so an older order cancelled today is not counted.',
         ...(open.hasMore ? ['Open-order counts are based on the first page scanned; totalOpen is exact but the hold/short/past-date breakdown is not.'] : []),
         ...(receiptsClosed.hasMore
           ? ['receipts.closedToday counts only the most recently created closed receipts that were scanned, because the upstream API cannot filter on the date a receipt was closed. A receipt created long ago and closed today may be missed.']
