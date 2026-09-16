@@ -1,0 +1,24 @@
+{
+  "name": "@mcp-3pl/core",
+  "version": "0.1.0",
+  "description": "Reusable MCP core for 3PL warehouse systems: task-shaped tools, read-only-by-default policy, two-phase mutations with idempotency, event store, adapter contract",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

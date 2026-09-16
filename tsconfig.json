@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/core" },
+    { "path": "packages/adapter-extensiv" },
+    { "path": "packages/mock-extensiv" },
+    { "path": "packages/webhook-ingest" },
+    { "path": "packages/server" }
+  ]
+}

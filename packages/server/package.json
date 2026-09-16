@@ -1,0 +1,29 @@
+{
+  "name": "extensiv-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for Extensiv 3PL Warehouse Manager: 16 task-shaped tools, read-only by default, two-phase audited writes",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "extensiv-mcp": "./dist/cli.js" },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@mcp-3pl/adapter-extensiv": "workspace:*",
+    "@mcp-3pl/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.15.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
