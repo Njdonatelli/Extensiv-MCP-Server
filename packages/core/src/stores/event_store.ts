@@ -21,6 +21,25 @@ export interface EventStore {
   count(): Promise<number>;
 }
 
+
+/** True for an empty or absent file too: there is nothing to separate from. */
+export async function endsWithNewline(file: string): Promise<boolean> {
+  let handle: fs.FileHandle | undefined;
+  try {
+    handle = await fs.open(file, 'r');
+    const { size } = await handle.stat();
+    if (size === 0) return true;
+    const buf = Buffer.alloc(1);
+    await handle.read(buf, 0, 1, size - 1);
+    return buf[0] === 0x0a;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
+    throw e;
+  } finally {
+    await handle?.close();
+  }
+}
+
 export class MemoryEventStore implements EventStore {
   protected readonly events: WmsEvent[] = [];
   protected readonly ids = new Set<string>();
@@ -49,7 +68,12 @@ export class MemoryEventStore implements EventStore {
   async query(q: EventQuery = {}): Promise<WmsEvent[]> {
     const limit = Math.min(Math.max(q.limit ?? 50, 1), 500);
     let out = this.events;
-    if (q.since) out = out.filter((e) => e.occurredAt >= q.since!);
+    if (q.since) {
+      // Comparing raw strings would mis-order '2026-09-16T04:00:00Z' against
+      // '2026-09-16T04:00:00.000+00:00'; both are the same instant.
+      const since = Date.parse(q.since);
+      if (Number.isFinite(since)) out = out.filter((e) => Date.parse(e.occurredAt) >= since);
+    }
     if (q.eventTypes?.length) {
       const wanted = new Set(q.eventTypes.map((t) => t.toLowerCase()));
       out = out.filter((e) => wanted.has(e.eventType.toLowerCase()));
@@ -121,7 +145,11 @@ export class JsonlEventStore extends MemoryEventStore {
     // back as a duplicate and was acknowledged. Claim the id only once it is on disk.
     const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
-      await fs.appendFile(this.file, line, 'utf8');
+      // A crash can leave a half-written final line. Appending straight onto it would glue
+      // the new record to the fragment, making BOTH unparseable, and the delivery would be
+      // acknowledged and never resent. A separator costs one byte and keeps the new record
+      // readable; the fragment stays skippable on its own line.
+      await fs.appendFile(this.file, (await endsWithNewline(this.file)) ? line : '\n' + line, 'utf8');
       // Deliberately NOT advancing bytesRead: another writer may have appended between
       // our read and our write, so the offset our line landed at is unknown. refresh()
       // rediscovers it and dedupes on id.

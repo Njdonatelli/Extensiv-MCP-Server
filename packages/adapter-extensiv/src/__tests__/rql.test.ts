@@ -96,3 +96,20 @@ describe('query translation', () => {
     );
   });
 });
+
+describe('read allow-list push-down', () => {
+  it('sends an =in= predicate for customerIds when no single customer was named', () => {
+    const q = orderRql({ customerIds: ['1', '2'] });
+    expect(q).toContain('readonly.customeridentifier.id=in=(1,2)');
+  });
+
+  it('prefers an explicit customerId over the allow-list', () => {
+    const q = orderRql({ customerId: '2', customerIds: ['1', '2'] });
+    expect(q).toContain('readonly.customeridentifier.id==2');
+    expect(q).not.toContain('=in=');
+  });
+
+  it('does the same for receipts', () => {
+    expect(receiptRql({ customerIds: ['7'] })).toContain('readonly.customeridentifier.id=in=(7)');
+  });
+});

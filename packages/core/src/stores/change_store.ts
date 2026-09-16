@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { ChangeRecord } from '../mutation.js';
+import { endsWithNewline } from './event_store.js';
 
 /**
  * Persistence for two-phase change records. The engine relies on `put` being
@@ -119,7 +120,8 @@ export class JsonlChangeStore extends MemoryChangeStore {
     const line = JSON.stringify(record) + '\n';
     const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
-      await fs.appendFile(this.file, line, 'utf8');
+      // Never append onto a torn final line from a crash: the new record must stay parseable.
+      await fs.appendFile(this.file, (await endsWithNewline(this.file)) ? line : '\n' + line, 'utf8');
       // Deliberately NOT advancing bytesRead: with a second writer on this file the offset
       // our line landed at is unknown. load() rediscovers it; last write for an id wins.
     });

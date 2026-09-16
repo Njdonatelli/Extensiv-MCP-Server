@@ -87,7 +87,12 @@ export class MutationEngine {
   }
 
   private target(): ChangeRecord['target'] {
-    return { system: this.adapter.info.system, baseUrl: this.adapter.info.baseUrl, environmentLabel: this.adapter.info.environmentLabel };
+    return {
+      system: this.adapter.info.system,
+      baseUrl: this.adapter.info.baseUrl,
+      environmentLabel: this.adapter.info.environmentLabel,
+      tenantKey: this.adapter.info.tenantKey,
+    };
   }
 
   async prepare<K extends MutationKind>(kind: K, input: MutationInputMap[K], opts: PrepareOptions = {}): Promise<PrepareResult> {
@@ -347,6 +352,11 @@ export class MutationEngine {
     if (rec.status === 'prepared') return !this.isExpired(rec, now);
     if (rec.status === 'committing' || rec.status === 'outcome_unknown') return true;
     if (rec.status === 'committed') {
+      // Only a create has a natural key that makes "already done" meaningful. An update or a
+      // cancel is a repeatable intent: setting a carrier back to UPS after someone changed it
+      // is byte-identical to the first request and must write again, not report the old
+      // outcome. Creates stay deduped briefly to absorb a double-submit.
+      if (rec.kind !== 'create_order' && rec.kind !== 'create_receipt') return false;
       const at = Date.parse(rec.committedAt ?? rec.createdAt);
       return Number.isFinite(at) && now.getTime() - at <= this.cfg.changeTtlSeconds * 1000;
     }
@@ -393,8 +403,19 @@ export class MutationEngine {
   }
 }
 
+/**
+ * Two tenants of the same vendor share a base URL and differ only by credentials, and two
+ * server instances launched from one directory share a state dir. Comparing the base URL
+ * alone would let a change prepared for one tenant commit against another, creating a real
+ * order under whatever customer that id happens to mean there.
+ */
 function sameTarget(a: ChangeRecord['target'], b: ChangeRecord['target']): boolean {
-  return a.system === b.system && a.baseUrl.replace(/\/+$/, '') === b.baseUrl.replace(/\/+$/, '');
+  return (
+    a.system === b.system &&
+    a.baseUrl.replace(/\/+$/, '') === b.baseUrl.replace(/\/+$/, '') &&
+    a.environmentLabel === b.environmentLabel &&
+    (a.tenantKey ?? '') === (b.tenantKey ?? '')
+  );
 }
 
 function describeFailures(failed: PreconditionResult[]): string {

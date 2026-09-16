@@ -529,9 +529,11 @@ export function toLotPosition(d: WireStockDetail): LotPosition {
     location: str(d.locationIdentifier?.nameKey?.name),
     onHand,
     available,
-    // INFERRED: stock details expose received/on-hand/available but no allocated column;
-    // on hand minus available is what an order has committed against this lot.
-    allocated: Math.max(0, onHand - available),
+    // INFERRED: stock details expose received/on-hand/available but no allocated column, so
+    // allocated is inferred from the gap. A held lot has nothing available yet nothing is
+    // allocated to an order either, so counting the whole lot as allocated would tell an
+    // operator their stock is committed to orders when it is actually frozen.
+    allocated: d.isOnHold === true ? 0 : Math.max(0, onHand - available),
     onHold: d.isOnHold === true ? onHand : 0,
     receivedAt: str(d.receivedDate),
   };

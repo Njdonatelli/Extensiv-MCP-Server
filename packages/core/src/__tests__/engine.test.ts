@@ -200,3 +200,62 @@ describe('MutationEngine commit', () => {
     expect(adapter.executeCalls).toHaveLength(0);
   });
 });
+
+describe('repeatable intents and tenant isolation', () => {
+  const updateSetup = () => setup();
+
+  it('lets an identical update_order be prepared and committed again', async () => {
+    // A warehouse user changes the carrier back; the operator asks the agent to re-apply the
+    // same value. The arguments are byte-identical to the first request, so a fingerprint
+    // dedupe that never expires would report "already committed" and write nothing.
+    const { adapter, engine } = updateSetup();
+    adapter.seedOrder({ id: '1', referenceNum: 'R-1', version: 'v1' });
+    const first = await engine.prepare('update_order', { orderId: '1', notes: 'gate code 4821' });
+    await engine.commit(first.changeId);
+    expect(adapter.executeCalls).toHaveLength(1);
+
+    const second = await engine.prepare('update_order', { orderId: '1', notes: 'gate code 4821' });
+    expect(second.changeId).not.toBe(first.changeId);
+    expect(second.status).toBe('prepared');
+    await engine.commit(second.changeId);
+    expect(adapter.executeCalls).toHaveLength(2);
+  });
+
+  it('still absorbs a double-submitted create within the reuse window', async () => {
+    const { engine } = setup();
+    const a = await engine.prepare('create_order', createInput);
+    const b = await engine.prepare('create_order', createInput);
+    expect(b.changeId).toBe(a.changeId);
+  });
+
+  it('refuses to commit a change belonging to another tenant on the same base URL', async () => {
+    // Two Extensiv tenants share https://secure-wms.com and differ only by credentials. If
+    // both servers run from one directory they share changes.jsonl, so the target must carry
+    // more than the base URL.
+    const shared = new MemoryChangeStore();
+    const adapterA = new FakeAdapter();
+    adapterA.info = { ...adapterA.info, baseUrl: 'https://secure-wms.com', environmentLabel: 'production', tenantKey: 'tenant-acme' };
+    const cfg = loadCoreConfig({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const engineA = new MutationEngine({ adapter: adapterA, store: shared, policy: new ScopePolicy(cfg), config: cfg });
+    const prepared = await engineA.prepare('create_order', createInput);
+
+    const adapterB = new FakeAdapter();
+    adapterB.info = { ...adapterB.info, baseUrl: 'https://secure-wms.com', environmentLabel: 'production', tenantKey: 'tenant-globex' };
+    const engineB = new MutationEngine({ adapter: adapterB, store: shared, policy: new ScopePolicy(cfg), config: cfg });
+    await expect(engineB.commit(prepared.changeId)).rejects.toMatchObject({ code: 'CHANGE_NOT_COMMITTABLE' });
+    expect(adapterB.executeCalls).toHaveLength(0);
+  });
+
+  it('refuses when only the environment label differs', async () => {
+    const shared = new MemoryChangeStore();
+    const cfg = loadCoreConfig({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const a = new FakeAdapter();
+    a.info = { ...a.info, environmentLabel: 'sandbox' };
+    const engineA = new MutationEngine({ adapter: a, store: shared, policy: new ScopePolicy(cfg), config: cfg });
+    const prepared = await engineA.prepare('create_order', createInput);
+    const b = new FakeAdapter();
+    b.info = { ...b.info, environmentLabel: 'production' };
+    const engineB = new MutationEngine({ adapter: b, store: shared, policy: new ScopePolicy(cfg), config: cfg });
+    await expect(engineB.commit(prepared.changeId)).rejects.toMatchObject({ code: 'CHANGE_NOT_COMMITTABLE' });
+  });
+});

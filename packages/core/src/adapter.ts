@@ -29,6 +29,12 @@ export interface AdapterInfo {
   baseUrl: string;
   /** "production" | "sandbox" | "mock" | free text; surfaced to the model on every write preview. */
   environmentLabel: string;
+  /**
+   * Opaque, non-secret identifier for the tenant/credential this adapter speaks for.
+   * Two tenants of the same vendor share a base URL and differ only by credentials, so
+   * without this a change prepared for one could be committed against the other.
+   */
+  tenantKey?: string;
   version?: string;
 }
 

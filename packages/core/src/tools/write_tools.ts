@@ -73,7 +73,7 @@ export const updateOrder = defineTool({
   name: 'update_order',
   title: 'Update order (prepare)',
   description:
-    'PREPARE a change to an OPEN outbound order: ship-to address fields, carrier/service, notes, earliest ship date. Returns a before/after preview and a change_id; NOTHING IS WRITTEN until commit_change. Closed (shipped) or cancelled orders cannot be updated. The commit uses optimistic concurrency: if someone else changed the order after the preview, commit fails and you must prepare again. Line-quantity changes are not supported; cancel and recreate instead.',
+    'PREPARE a change to an OPEN outbound order: ship-to address fields, carrier/service, notes, earliest ship date. At least one of ship_to, carrier, service, notes or earliest_ship_date must be supplied. Returns a before/after preview and a change_id; NOTHING IS WRITTEN until commit_change. Closed (shipped) or cancelled orders cannot be updated. The commit uses optimistic concurrency: if someone else changed the order after the preview, commit fails and you must prepare again. Line-quantity changes are not supported; cancel and recreate instead.',
   kind: 'prepare',
   inputSchema: z
     .object({

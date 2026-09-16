@@ -239,3 +239,23 @@ describe('order sub-resources', () => {
     expect(tracking.totalResults).toBe(24);
   });
 });
+
+describe('the seeded world matches what MOCK_FIDELITY.md claims', () => {
+  // The fidelity table is a deliverable: a reader re-verifying the real API against it must
+  // be able to trust its counts. A drifting seed should fail here, not mislead them.
+  it('has 9 receivers: 5 closed, 3 open, 1 cancelled', async () => {
+    const res = await h.get('/inventory/receivers?pgsiz=100');
+    const body = (await res.json()) as Record<string, unknown>;
+    const rows = embedded<{ readOnly: { status: number } }>(body, RECEIVER_REL);
+    expect(body.totalResults).toBe(9);
+    const count = (status: number): number => rows.filter((r) => r.readOnly.status === status).length;
+    expect({ open: count(0), closed: count(1), cancelled: count(2) }).toEqual({ open: 3, closed: 5, cancelled: 1 });
+  });
+
+  it('has 4 customers and 2 facilities', async () => {
+    const customers = (await (await h.get('/customers?pgsiz=100')).json()) as { totalResults: number };
+    const facilities = (await (await h.get('/properties/facilities?pgsiz=100')).json()) as { totalResults: number };
+    expect(customers.totalResults).toBe(4);
+    expect(facilities.totalResults).toBe(2);
+  });
+});

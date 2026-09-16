@@ -93,3 +93,13 @@ Idempotency layers:
 
 ## Error contract to the model
 Every tool error is `{ error: { code, message, hint?, retryable, details? } }` with `isError: true`. Codes: `AUTH_FAILED, SCOPE_DENIED, WRITES_DISABLED, NOT_FOUND, AMBIGUOUS, VALIDATION, PRECONDITION_FAILED, CHANGE_EXPIRED, CHANGE_UNKNOWN, CHANGE_NOT_COMMITTABLE, RATE_LIMITED, UPSTREAM_ERROR, UPSTREAM_UNAVAILABLE, OUTCOME_UNKNOWN, INTERNAL`.
+
+## Known limitations
+
+**Argument-schema violations are not audited.** Each tool is registered with its full zod schema so the model receives an accurate JSON Schema. The MCP SDK validates arguments against that schema before the handler runs, so a malformed call returns the SDK's own `Input validation error: …` text rather than this server's `{ error: { code: 'VALIDATION', … } }` shape, and no audit entry is written. Registering a permissive schema instead would restore both, at the cost of hiding every argument's type and description from the model, which is a worse trade for a server whose whole point is that the model picks the right tool with the right arguments. A malformed call never reaches the warehouse system, so the gap is in observability of client bugs, not in write safety. The SDK exposes no tool-call middleware in 1.30 that would let us have both.
+
+**Cross-field requirements are invisible to the model unless the description says so.** A zod `.refine()` is dropped when the schema is converted to JSON Schema. Every such requirement is therefore stated in the field and tool descriptions, and `get_order_status`, `get_receipt_status` and `update_order` each carry theirs. Adding a new refined schema means adding the sentence too.
+
+**A change is bound to its tenant, not just its base URL.** Two Extensiv tenants share `https://secure-wms.com` and differ only by credentials, and two server instances launched from one directory share a state directory. `ChangeRecord.target` therefore carries the system, the base URL, the environment label and a non-secret digest of the credential (`AdapterInfo.tenantKey`), and a commit is refused unless all four match. Give each tenant its own `EXTENSIV_MCP_STATE_DIR` as well.
+
+**Committed changes are reused only for creates.** A prepared change is deduped by intent so a double-submit cannot write twice. That reuse extends past the commit only for `create_order` and `create_receipt`, which have a natural key that makes "already done" meaningful. `update_order` and `cancel_order` are repeatable intents: setting a field back to a value it previously held is byte-identical to the earlier request and must write again.

@@ -7,10 +7,11 @@ What is actually proven about this server, and what is still waiting on real Ext
 | | |
 |---|---|
 | Commit | `44a24e9` |
-| Test suite | 313 tests in 22 files, all passing (`npx vitest run`) |
-| By package | mock-extensiv 127, adapter-extensiv 85, core 53, server 35 (20 integration + 15 attack), webhook-ingest 7, evals 6 |
+| Test suite | 324 tests in 22 files, all passing (`npx vitest run`) |
+| By package | mock-extensiv 129, adapter-extensiv 88, core 59, server 35 (20 integration + 15 attack), webhook-ingest 7, evals 6 |
 | Typecheck and build | `npx tsc -b tsconfig.json` and `pnpm -r --filter './packages/*' run build` both clean |
-| Tool-selection eval | 4 runs through a real MCP client against the running server; best 19/25 first-call (76%), 23/25 task-reach (92%) |
+| Tool-selection eval | 4 runs through a real MCP client against the running server; 19/25 first-call (76%), 23/25 task-reach (92%), stable across the review fixes |
+| Adversarial review | 6 lenses raised 53 findings; 13 survived 3-vote adversarial verification and all 13 are addressed or documented |
 | Mock fidelity | 129 behaviours classified across 184 table rows: 85 Documented, 12 Inferred, 32 Guess ([MOCK_FIDELITY.md](../packages/mock-extensiv/MOCK_FIDELITY.md)) |
 
 ---
@@ -37,6 +38,9 @@ What is actually proven about this server, and what is still waiting on real Ext
 | Out-of-scope writes and reads are refused before reaching the API | `attacks.test.ts` asserts `SCOPE_DENIED` and an empty write log; core suite covers names, ids, partial matches and facilities |
 | A change prepared against one base URL cannot be committed against another | `attacks.test.ts` builds a second mock and asserts `CHANGE_NOT_COMMITTABLE` |
 | Blast-radius caps refuse an oversized mutation | `attacks.test.ts` |
+| A change cannot be committed against another tenant that shares the base URL, or under a different environment label | core engine suite: two adapters differing only by `tenantKey`, and two differing only by label, both refused |
+| An identical `update_order` can be prepared and committed again, while a double-submitted create is still absorbed | core engine suite |
+| A torn final line in a JSONL store is separated rather than glued to the next record | store suite writes an unterminated line, appends, and reads both back |
 | The client secret never reaches a tool result, the audit log or the change store | `attacks.test.ts` greps all three |
 | Webhook deliveries verify against the published key, survive rotation, and dedupe | webhook-ingest suite (7 tests), including a real signature check and a rotation that re-fetches the key once |
 | An event ingested by the separate process is visible to `recent_events` | `integration.test.ts` wires the ingest app to the mock's subscription and asserts the event arrives with `verified: true` |
@@ -49,6 +53,7 @@ What is actually proven about this server, and what is still waiting on real Ext
 | Nothing is written to stdout except MCP protocol traffic | Asserted by the logger's design (stderr only) and by the stdio client working, not by a byte-level check | A stray `console.log` would corrupt the stdio transport |
 | The Streamable HTTP transport shares one set of stores per process | Covered by a cross-instance store test and the wiring in `cli.ts`; no multi-session HTTP test | A change prepared in one session would be unknown in another |
 | Secrets are redacted from logs | `redact()` is unit-covered by key shape, and the attack suite greps the artefacts; log output is not scanned line by line | A credential in a log file |
+| Argument-schema violations reach the model as the SDK's own validation error, not this server's structured shape, and are not audited | The SDK validates before the handler runs and 1.30 exposes no tool-call middleware. Deliberate: see "Known limitations" in `architecture.md`. A malformed call never reaches the warehouse system | A client bug is harder to see in the audit log |
 
 ## 3. Waits on real credentials
 

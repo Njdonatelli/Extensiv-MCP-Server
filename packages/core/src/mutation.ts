@@ -134,7 +134,7 @@ export interface ChangeRecord {
   idempotencyKey?: string;
   plan: MutationPlan;
   /** Environment the plan was prepared against; commits refuse to cross environments. */
-  target: { system: string; baseUrl: string; environmentLabel: string };
+  target: { system: string; baseUrl: string; environmentLabel: string; tenantKey?: string };
   createdAt: string;
   expiresAt: string;
   committedAt?: string;

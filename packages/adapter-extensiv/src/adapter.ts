@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * WmsAdapter implementation for the Extensiv 3PL Warehouse Manager REST API.
  *
@@ -12,7 +13,7 @@
  * RQL property name or semantic the docs do not spell out, `// GUESS:` for a
  * value we had to choose. The README lists every INFERRED name in one table.
  */
-import { HttpClient, UpstreamHttpError, WmsError, silentLogger, systemClock } from '@mcp-3pl/core';
+import { HttpClient, UpstreamHttpError, WmsError, isWmsError, silentLogger, systemClock } from '@mcp-3pl/core';
 import type {
   AdapterInfo,
   Address,
@@ -237,6 +238,9 @@ export function orderRql(query: OrderQuery): string {
     // shows `customeridentifier.id` as the dotted-nesting example but never names these two
     // on the order model; they follow the documented model property path.
     query.customerId !== undefined && eq('readonly.customeridentifier.id', toWireId(query.customerId)),
+    // A read allow-list is pushed down as =in= so a scoped server does not page through
+    // customers it will only discard (SOURCE https://3w.extensiv.com/Rels/rql for =in=).
+    query.customerId === undefined && query.customerIds !== undefined && query.customerIds.length > 0 && inList('readonly.customeridentifier.id', query.customerIds.map(toWireId)),
     query.facilityId !== undefined && eq('readonly.facilityidentifier.id', toWireId(query.facilityId)),
     // SOURCE https://3w.extensiv.com/Rels/rql names readonly.creationdate verbatim.
     query.createdAfter !== undefined && ge('readonly.creationdate', query.createdAfter),
@@ -274,6 +278,7 @@ export function receiptRql(query: ReceiptQuery): string {
   return and(
     // INFERRED: same identifier paths as orders.
     query.customerId !== undefined && eq('readonly.customeridentifier.id', toWireId(query.customerId)),
+    query.customerId === undefined && query.customerIds !== undefined && query.customerIds.length > 0 && inList('readonly.customeridentifier.id', query.customerIds.map(toWireId)),
     query.facilityId !== undefined && eq('readonly.facilityidentifier.id', toWireId(query.facilityId)),
     query.referenceNum !== undefined && eq('referencenum', query.referenceNum),
     // INFERRED: ponum / expecteddate / arrivaldate as rql property names.
@@ -329,13 +334,23 @@ export class ExtensivAdapter implements WmsAdapter {
       displayName: DISPLAY_NAME,
       baseUrl: cfg.baseUrl,
       environmentLabel: cfg.environmentLabel,
+      // Non-secret: a digest, never the credential itself. It exists so a change prepared
+      // for one tenant cannot be committed against another that shares this base URL.
+      tenantKey: createHash('sha256').update(`${cfg.clientId}\n${cfg.userLogin}\n${cfg.tplGuid ?? ''}`).digest('hex').slice(0, 16),
     };
   }
 
   // ---- low-level helpers -------------------------------------------------
 
   private async get<T>(path: string, query?: Record<string, string | number | boolean | undefined>): Promise<HttpResponse<T>> {
-    return this.http.request<T>({ method: 'GET', path, query });
+    try {
+      return await this.http.request<T>({ method: 'GET', path, query });
+    } catch (e) {
+      // Every read went out through here without translation, so a 403 for a missing role
+      // and a 400 rejecting an inferred RQL property both reached the model as a bare
+      // UPSTREAM_ERROR with no hint and nothing to act on.
+      throw translateUpstreamError(e, { what: `GET ${path}` });
+    }
   }
 
   /** GET that answers null on 404 instead of throwing, for "does it exist" reads. */
@@ -343,8 +358,8 @@ export class ExtensivAdapter implements WmsAdapter {
     try {
       return await this.get<T>(path, query);
     } catch (e) {
-      if (statusOf(e) === 404) return null;
-      throw translateUpstreamError(e, { what: `GET ${path}` });
+      if (statusOf(e) === 404 || (isWmsError(e) && e.code === 'NOT_FOUND')) return null;
+      throw e;
     }
   }
 
@@ -459,9 +474,11 @@ export class ExtensivAdapter implements WmsAdapter {
     const customers = await this.listCustomers();
     const found = customers.find((c) => c.id === String(customerId));
     if (!found) {
+      // No roster in the details: the adapter cannot see the read allow-list, and this error
+      // is returned to the model as-is. describe_scope is the scope-aware way to list them.
       throw new WmsError('NOT_FOUND', `No customer with id '${customerId}' is visible to this credential.`, {
-        hint: 'Call describe_scope to list the customer ids this server can see.',
-        details: { customers: customers.map((c) => ({ id: c.id, name: c.name })) },
+        hint: 'Call describe_scope to list the customers this server can see, then use one of those ids or names.',
+        details: { customerId: String(customerId), visibleCount: customers.length },
       });
     }
     return found;

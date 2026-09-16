@@ -65,6 +65,17 @@ export const describeScope = defineTool({
 
 const orderStatusEnum = z.enum(['open', 'complete', 'closed', 'cancelled']);
 
+/**
+ * The customer filter to send upstream when the caller named no customer. Without it a
+ * scoped server asks for every customer's rows and throws most away, which both wastes the
+ * upstream page and makes any total it reports meaningless.
+ */
+function scopedCustomerIds(ctx: ToolContext, named: string | undefined): string[] | undefined {
+  if (named !== undefined) return undefined;
+  const allowed = ctx.policy.readCustomerFilter();
+  return allowed && allowed.length > 0 ? allowed : undefined;
+}
+
 export const findOrders = defineTool({
   name: 'find_orders',
   title: 'Find orders',
@@ -96,6 +107,7 @@ export const findOrders = defineTool({
     const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const page = await ctx.adapter.findOrders({
       customerId,
+      customerIds: scopedCustomerIds(ctx, customerId),
       facilityId,
       statuses: input.statuses,
       onHold: input.on_hold,
@@ -170,7 +182,7 @@ export const findStuckOrders = defineTool({
   handler: async (input, ctx) => {
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
     const facilityId = await resolveFacilityRef(ctx, input.facility_id);
-    const page = await ctx.adapter.findOrders({ customerId, facilityId, statuses: ['open', 'complete'], limit: input.limit, page: 1 });
+    const page = await ctx.adapter.findOrders({ customerId, customerIds: scopedCustomerIds(ctx, customerId), facilityId, statuses: ['open', 'complete'], limit: input.limit, page: 1 });
     const now = ctx.clock.now().getTime();
     const groups: Record<string, { order: OrderSummary; reason: string }[]> = { short: [], on_hold: [], aging: [], past_ship_date: [], in_progress_stalled: [] };
     for (const o of page.items) {
@@ -302,6 +314,7 @@ export const findReceipts = defineTool({
     const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const page = await ctx.adapter.findReceipts({
       customerId,
+      customerIds: scopedCustomerIds(ctx, customerId),
       facilityId,
       statuses: input.statuses,
       referenceNum: input.reference_num,
@@ -366,7 +379,7 @@ export const operationsSummary = defineTool({
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
     const facilityId = await resolveFacilityRef(ctx, input.facility_id);
     const win = dayWindow(input.day, ctx.clock);
-    const base = { customerId, facilityId, limit: 500, page: 1 };
+    const base = { customerId, customerIds: scopedCustomerIds(ctx, customerId), facilityId, limit: 500, page: 1 };
     const [created, shipped, open, receiptsExpected, receiptsOpen, receiptsClosed, events] = await Promise.all([
       ctx.adapter.findOrders({ ...base, createdAfter: win.start, createdBefore: win.end }),
       ctx.adapter.findOrders({ ...base, statuses: ['closed'], shippedAfter: win.start, shippedBefore: win.end }),

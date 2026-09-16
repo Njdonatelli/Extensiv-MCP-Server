@@ -114,6 +114,8 @@ export interface OrderDetail extends OrderSummary {
 
 export interface OrderQuery {
   customerId?: string;
+  /** Restrict to these customers. Used to push a read allow-list upstream. */
+  customerIds?: string[];
   facilityId?: string;
   statuses?: OrderStatus[];
   onHold?: boolean;
@@ -242,6 +244,8 @@ export interface ReceiptDetail extends ReceiptSummary {
 
 export interface ReceiptQuery {
   customerId?: string;
+  /** Restrict to these customers. Used to push a read allow-list upstream. */
+  customerIds?: string[];
   facilityId?: string;
   statuses?: ReceiptStatus[];
   referenceNum?: string;
