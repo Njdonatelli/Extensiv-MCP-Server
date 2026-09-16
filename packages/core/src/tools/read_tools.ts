@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import type { InventoryPosition, OrderSummary, ReceiptSummary } from '../domain.js';
+import type { OrderSummary, ReceiptSummary } from '../domain.js';
 import { WmsError } from '../errors.js';
 import { common, defineTool, type ToolContext } from './define.js';
 
@@ -136,8 +136,8 @@ export const getOrderStatus = defineTool({
   kind: 'read',
   inputSchema: z
     .object({
-      order_id: z.string().optional().describe('Warehouse order id.'),
-      reference_num: z.string().optional().describe('Customer-facing reference number, e.g. ACME-SO-10007.'),
+      order_id: z.string().optional().describe('Warehouse order id. Provide this OR reference_num; at least one is required.'),
+      reference_num: z.string().optional().describe('Customer-facing reference number, e.g. ACME-SO-10007. Provide this OR order_id; at least one is required.'),
       customer_id: common.customerId.optional(),
     })
     .refine((v) => v.order_id || v.reference_num, { message: 'order_id or reference_num is required' }),
@@ -223,8 +223,6 @@ export const checkInventory = defineTool({
     }
     const items = await ctx.adapter.findItems({ customerId, activeOnly: true, limit: 1000 });
     const reorder = new Map(items.map((i) => [i.sku, i.reorderPoint]));
-    const byKey = new Map<string, InventoryPosition>();
-    for (const p of positions) byKey.set(`${p.sku}|${p.facility.id}`, p);
     const low: { sku: string; facility: string; available: number; onHand: number; reorderPoint?: number; threshold: number; deficit: number }[] = [];
     // Items with no stock row at all are the most urgent low-stock cases.
     for (const item of items) {
@@ -242,7 +240,6 @@ export const checkInventory = defineTool({
       }
     }
     low.sort((a, b) => b.deficit - a.deficit);
-    void byKey;
     return { customerId, facilityId: input.facility_id, lowStockCount: low.length, lowStock: low.slice(0, input.limit), rule: 'available <= reorderPoint (item master) or threshold (argument)' };
   },
 });
@@ -318,8 +315,8 @@ export const getReceiptStatus = defineTool({
   kind: 'read',
   inputSchema: z
     .object({
-      receipt_id: z.string().optional(),
-      reference_num: z.string().optional(),
+      receipt_id: z.string().optional().describe('Warehouse receipt id. Provide this OR reference_num; at least one is required.'),
+      reference_num: z.string().optional().describe('Customer-facing receipt reference number. Provide this OR receipt_id; at least one is required.'),
       customer_id: common.customerId.optional(),
     })
     .refine((v) => v.receipt_id || v.reference_num, { message: 'receipt_id or reference_num is required' }),
@@ -386,7 +383,13 @@ export const operationsSummary = defineTool({
         openTotal: receiptsOpen.total,
       },
       events: { sinceStartOfDay: events.length, byType: countBy(events.map((e) => e.eventType)) },
-      truncation: { openOrdersScanned: openOrders.length, openOrdersTotal: open.total },
+      truncation: { openOrdersScanned: openOrders.length, openOrdersTotal: open.total, closedReceiptsScanned: receiptsClosed.items.length, closedReceiptsTotal: receiptsClosed.total },
+      caveats: [
+        ...(open.hasMore ? ['Open-order counts are based on the first page scanned; totalOpen is exact but the hold/short/past-date breakdown is not.'] : []),
+        ...(receiptsClosed.hasMore
+          ? ['receipts.closedToday counts only the most recently created closed receipts that were scanned, because the upstream API cannot filter on the date a receipt was closed. A receipt created long ago and closed today may be missed.']
+          : []),
+      ],
     };
   },
 });

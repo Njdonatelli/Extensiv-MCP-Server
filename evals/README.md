@@ -1,6 +1,6 @@
 # Tool-selection evals
 
-`evals/prompts.json` holds 25 prompts that a 3PL ops person or account manager might type to an assistant connected to the Extensiv MCP server. Each prompt is scored on **which tool the model calls first**, nothing else. The fixture assumes the mock data set: customer Acme Outdoor Co (in the write allow-list), customer Globex Industries (customer 77, read-only), facility Reno, SKUs `ACME-TENT-2P`, `ACME-STOVE-1`, orders `ACME-SO-100xx`, receipt `88213`.
+`evals/prompts.json` holds 25 prompts that a 3PL ops person or account manager might type to an assistant connected to the Extensiv MCP server. Each prompt is scored on **which tool the model calls first**, nothing else. The prompts use the world that `packages/mock-extensiv/src/seed.ts` actually builds: customer **Acme Outdoor Co** (id 1, in the write allow-list, facilities LAX-1 and DFW-2), **Bluebird Cosmetics** (id 2), **Out Of Scope Co** (id 9, outside the write allow-list), SKUs `ACME-TENT-2P`, `ACME-STOVE-01`, `ACME-FILTER-SQZ` (lot tracked), orders `ACME-SO-100xx` (10021/10022 short, 10023 on hold, 10024 past its earliest ship date, 10026 open), and receipts `ACME-ASN-5003` (closed, with a receiving variance) and `ACME-ASN-5004` (open, due tomorrow). A correct tool call therefore returns real data against the mock, not a not-found.
 
 ## Prompt record
 
@@ -47,47 +47,75 @@ Report:
 
 ## Runner
 
-`pnpm evals` runs `evals/run.ts` (written separately; this README is its spec).
+Two programs, because scoring and model-driving are separate concerns.
 
-Live mode:
+### 1. `evals/drive_client.ts` — produce selections with a real MCP client
 
-1. Starts (or connects to) the MCP server twice: once with `EXTENSIV_MCP_WRITES_ENABLED=false` and once with `true`, against the mock (`EXTENSIV_BASE_URL=http://127.0.0.1:4010`), and fetches the **real tool list** from each, including descriptions and input schemas. The evals therefore test the tool descriptions as shipped, not a hand-written copy.
-2. For each prompt, presents the tool list matching `requires_writes_enabled` to a Claude model with a short system prompt ("You are an assistant for a 3PL using the Extensiv MCP server; use the tools to answer"), sends the prompt, and records the **first tool call** (name and arguments). The model's text is kept in the results file but not scored. No tool results are returned to the model; the run stops after the first call.
-3. Writes `evals/results/<timestamp>.json` with one record per prompt: id, presented tool names, model, first tool name, arguments, model text, pass/fail.
-4. Prints the report described above and exits non-zero if overall accuracy is below the threshold given with `--min-accuracy <0..1>` (default 0, so it only reports).
+This drives **this repository's own server binary over MCP** with a real model, one fresh client session per prompt, and records the first tool the model chose. The tool descriptions and input schemas reach the model exactly as they will in production, because they come from the running server rather than a copy pasted into a prompt.
 
-Replay mode: `pnpm evals --from-file results.json` re-scores an existing results file against the current `prompts.json` without calling a model. Use it after editing `expected_tool`, `acceptable_tools` or `expected_args_contains`, and to compare two runs.
+It shells out to the `claude` CLI in headless mode (`--output-format stream-json`), passing an `--mcp-config` that launches `packages/server/dist/cli.js` with the mock credentials and a private state directory per prompt. Prompts whose `requires_writes_enabled` is true get `EXTENSIV_MCP_WRITES_ENABLED=true` plus a write allow-list, so those sessions really are offered 16 tools and the others really are offered 11. The recorded `tools_offered` count per prompt proves which list was presented.
 
-Other flags the runner accepts: `--model <id>`, `--only E03,E12` (subset), `--writes-tool-list <path>` / `--read-tool-list <path>` (use saved tool lists instead of starting the server).
+Runs are serial on purpose: a parallel burst would make rate limiting, not tool choice, the thing being measured.
 
-Command lines (Bash or Zsh):
+Prerequisites, in order (Bash or Zsh):
 
 ```bash
-pnpm evals
+pnpm install && pnpm build
 ```
-
-Expected last line of output:
-
-```
-overall 23/25 (0.92)  read 12/14  write-prepare 5/5  commit 2/2  policy 2/2  ambiguous 2/2
-```
+Expected: no TypeScript errors.
 
 ```bash
-pnpm evals --from-file evals/results/2026-09-16T10-00-00Z.json
+pnpm --filter @mcp-3pl/mock-extensiv start
 ```
+Expected output: `Mock Extensiv API listening on http://127.0.0.1:4010`. Leave this running in its own shell.
 
-Expected last line of output: same format as above, prefixed with `replay`.
+Then, in a second shell (Bash or Zsh):
 
-PowerShell:
+```bash
+npx tsx evals/drive_client.ts --out evals/results/selections.json --model claude-sonnet-5
+```
+Expected output: one line per prompt, `E01 [read-only, 11 tools] -> verify_connection`, ending with `25/25 prompts produced a tool call.`
+
+PowerShell, same two steps:
 
 ```powershell
-pnpm evals
-pnpm evals --from-file evals\results\2026-09-16T10-00-00Z.json
+pnpm --filter @mcp-3pl/mock-extensiv start
 ```
 
-Expected output: same as above.
+```powershell
+npx tsx evals/drive_client.ts --out evals/results/selections.json --model claude-sonnet-5
+```
 
-The model needs an API key in the environment (`ANTHROPIC_API_KEY`); the runner refuses to start live mode without it and prints how to use `--from-file` instead.
+Flags: `--model <id>`, `--only E03,E12` for a subset, `--base <url>` to point at a different API, `--timeout-ms <n>` per prompt.
+
+### 2. `evals/run.ts` — score
+
+```bash
+npx tsx evals/run.ts --from-file evals/results/selections.json
+```
+Expected output: the accuracy report, the miss list, and the path of the timestamped results file it wrote under `evals/results/`.
+
+Add `--min-accuracy 0.9` to make it exit non-zero below a threshold, for CI.
+
+`npx tsx evals/run.ts --dump-tools <path>` writes the exact tool list and system prompts an offline or third-party run should present, so a run can be reproduced without this repo's harness.
+
+`evals/run.ts` also has an API-key live mode (`ANTHROPIC_API_KEY` plus the `@anthropic-ai/sdk`) that sends the tool list to the Messages API directly. It exists for environments without the `claude` CLI; the MCP-client driver above is the preferred path because it exercises the real transport.
+
+### Reading the report
+
+```
+Tool-selection accuracy: 23/25 (92%)
+  read           12/14
+  write-prepare  5/5
+  commit         2/2
+  policy         2/2
+  ambiguous      2/2
+
+  MISS E05 expected find_stuck_orders got find_orders
+results: evals/results/2026-09-16T10-00-00-000Z.json
+```
+
+The results file keeps every selection and its arguments, so a miss can be reviewed without re-running the model. `docs/production_write_signoff.md` asks for the overall number and the `write-prepare`, `commit` and `policy` numbers.
 
 ## Adding prompts
 

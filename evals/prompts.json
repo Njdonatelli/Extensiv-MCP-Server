@@ -19,7 +19,9 @@
     "id": "E03",
     "prompt": "Pull up Acme Outdoor Co's open orders that were created last week. Just the short list, I don't need every line item.",
     "expected_tool": "find_orders",
-    "expected_args_contains": { "status": "open" },
+    "expected_args_contains": {
+      "status": "open"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "Search by customer + status + created date range with compact summaries is find_orders. find_stuck_orders would add an exception filter the user did not ask for."
@@ -28,7 +30,9 @@
     "id": "E04",
     "prompt": "What's going on with ACME-SO-10007? Did it ship, and if so what's the tracking number?",
     "expected_tool": "get_order_status",
-    "expected_args_contains": { "reference_number": "ACME-SO-10007" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10007"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "One order by reference number, needs status, packages and tracking numbers: get_order_status returns all of it in one call."
@@ -37,50 +41,60 @@
     "id": "E05",
     "prompt": "anything stuck for acme? orders that have been sitting open more than 3 days or that we can't fill",
     "expected_tool": "find_stuck_orders",
-    "expected_args_contains": { "open_days": 3 },
+    "expected_args_contains": {
+      "open_days": 3
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "'Stuck', 'sitting open more than N days', 'can't fill' (short on inventory) are the exception filters find_stuck_orders exists for."
   },
   {
     "id": "E06",
-    "prompt": "How many ACME-TENT-2P do we have available for Acme Outdoor Co at the Reno building right now, and is any of it on hold or expiring?",
+    "prompt": "How many ACME-TENT-2P do we have available for Acme Outdoor Co at LAX-1 right now, and is any of it on hold or expiring?",
     "expected_tool": "check_inventory",
-    "expected_args_contains": { "sku": "ACME-TENT-2P" },
+    "expected_args_contains": {
+      "sku": "ACME-TENT-2P"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "Stock position (available / on hold / lots and expiry) for a SKU at a customer + facility is check_inventory. lookup_item would only return the item master."
   },
   {
     "id": "E07",
-    "prompt": "Is ACME-TENT-2P lot tracked? And what are its carton dims and weight, the carrier is asking.",
+    "prompt": "Is ACME-FILTER-SQZ lot tracked? And what are its carton dims and weight, the carrier is asking.",
     "expected_tool": "lookup_item",
-    "expected_args_contains": { "sku": "ACME-TENT-2P" },
+    "expected_args_contains": {
+      "sku": "ACME-TENT-2P"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "Item master attributes (lot/serial/expiry tracking, dims, weight, UOM) live on the item record, so lookup_item, not check_inventory."
   },
   {
     "id": "E08",
-    "prompt": "Do we have any inbound for Acme expected this week? Specifically looking for their PO 4471.",
+    "prompt": "Do we have any inbound for Acme expected this week? Specifically looking for their PO-ACME-2204.",
     "expected_tool": "find_receipts",
-    "expected_args_contains": { "po_number": "4471" },
+    "expected_args_contains": {
+      "po_number": "4471"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "Inbound receipts/ASNs filtered by customer, PO number and expected date range is find_receipts."
   },
   {
     "id": "E09",
-    "prompt": "Receipt 88213 for Acme came in yesterday. What did we actually receive vs what the ASN said, line by line? The customer says they're short 40 tents.",
+    "prompt": "Receipt ACME-ASN-5003 for Acme came in last week. What did we actually receive vs what the ASN said, line by line? The customer says they're short 40 tents.",
     "expected_tool": "get_receipt_status",
-    "expected_args_contains": { "receipt_id": 88213 },
+    "expected_args_contains": {
+      "receipt_id": 88213
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "Single receipt in depth with expected vs received per line and variances is get_receipt_status."
   },
   {
     "id": "E10",
-    "prompt": "Give me today's rundown for Acme at Reno: what got created, shipped, cancelled, anything on hold, and what inbound closed.",
+    "prompt": "Give me today's rundown for Acme at LAX-1: what got created, shipped, cancelled, anything on hold, and what inbound closed.",
     "expected_tool": "operations_summary",
     "requires_writes_enabled": false,
     "category": "read",
@@ -90,107 +104,134 @@
     "id": "E11",
     "prompt": "What shipped for Acme in the last two hours according to the webhook feed? I want the OrderConfirm events, not a search.",
     "expected_tool": "recent_events",
-    "expected_args_contains": { "event_type": "OrderConfirm" },
+    "expected_args_contains": {
+      "event_type": "OrderConfirm"
+    },
     "requires_writes_enabled": false,
     "category": "read",
     "rationale": "The user explicitly asks for ingested webhook events filtered by type/customer/since, which is recent_events, not find_orders."
   },
   {
     "id": "E12",
-    "prompt": "Set up an order for Acme Outdoor Co out of Reno: ref ACME-SO-10101, 2 x ACME-TENT-2P and 1 x ACME-STOVE-1, ship to Jane Doe, 123 Main St, Boise ID 83702, UPS Ground. Show me what it'll look like before anything goes in.",
+    "prompt": "Set up an order for Acme Outdoor Co out of LAX-1: ref ACME-SO-10101, 2 x ACME-TENT-2P and 1 x ACME-STOVE-01, ship to Jane Doe, 123 Main St, Boise ID 83702, UPS Ground. Show me what it'll look like before anything goes in.",
     "expected_tool": "create_order",
-    "expected_args_contains": { "reference_number": "ACME-SO-10101" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10101"
+    },
     "requires_writes_enabled": true,
     "category": "write-prepare",
     "rationale": "New outbound order with lines and ship-to. create_order only validates and returns a preview + change_id; the user's 'before anything goes in' matches the two-phase design."
   },
   {
     "id": "E13",
-    "prompt": "The customer moved. Change the ship-to on ACME-SO-10007 to 88 Harbor Way, Suite 4, Tacoma WA 98402 and switch it to FedEx 2Day. Don't send it yet, just prep it.",
+    "prompt": "The customer moved. Change the ship-to on ACME-SO-10026 to 88 Harbor Way, Suite 4, Tacoma WA 98402 and switch it to FedEx 2Day. Don't send it yet, just prep it.",
     "expected_tool": "update_order",
-    "expected_args_contains": { "reference_number": "ACME-SO-10007" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10007"
+    },
     "requires_writes_enabled": true,
     "category": "write-prepare",
     "rationale": "Ship-to and carrier/service edits on an open order are update_order (PUT /orders/{id} with If-Match). Returns preview + change_id; nothing is written."
   },
   {
     "id": "E14",
-    "prompt": "Cancel ACME-SO-10009, customer requested it this morning. Reason: customer cancelled before pick.",
+    "prompt": "Cancel ACME-SO-10021, customer requested it this morning. Reason: customer cancelled before pick.",
     "expected_tool": "cancel_order",
-    "expected_args_contains": { "reference_number": "ACME-SO-10009" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10009"
+    },
     "requires_writes_enabled": true,
     "category": "write-prepare",
     "rationale": "Cancelling an open order with a reason is cancel_order (prepare). The reason is required by POST /orders/{id}/canceler; the tool returns a preview + change_id."
   },
   {
     "id": "E15",
-    "prompt": "Acme has 480 ACME-TENT-2P and 120 ACME-STOVE-1 arriving Thursday on their PO 4490, trailer coming into Reno. Set up the ASN so receiving can check it in.",
+    "prompt": "Acme has 480 ACME-TENT-2P and 120 ACME-STOVE-01 arriving Thursday on their PO-ACME-2210, trailer coming into LAX-1. Set up the ASN so receiving can check it in.",
     "expected_tool": "create_receipt",
-    "expected_args_contains": { "po_number": "4490" },
+    "expected_args_contains": {
+      "po_number": "4490"
+    },
     "requires_writes_enabled": true,
     "category": "write-prepare",
     "rationale": "Expected inbound lines with PO and expected date is a new receipt/ASN: create_receipt (prepare). Not find_receipts because the user is creating, not searching."
   },
   {
     "id": "E16",
-    "prompt": "Yes, that preview looks right. Go ahead and commit change chg_01J9Q4W7E8K2M3N4P5R6S7T8U9.",
+    "prompt": "Yes, that preview looks right. Go ahead and commit change chg_k7m2p9q4r8t3v6w2.",
     "expected_tool": "commit_change",
-    "expected_args_contains": { "change_id": "chg_01J9Q4W7E8K2M3N4P5R6S7T8U9" },
+    "expected_args_contains": {
+      "change_id": "chg_k7m2p9q4r8t3v6w2"
+    },
     "requires_writes_enabled": true,
     "category": "commit",
     "rationale": "Explicit approval with a change_id is the commit phase. Calling the prepare tool again would create a second change instead of executing the reviewed one."
   },
   {
     "id": "E17",
-    "prompt": "ok ship it - commit chg_01J9Q5A1B2C3D4E5F6G7H8J9K0 (the cancel for 10009)",
+    "prompt": "ok ship it - commit chg_n4r8s2t6v9w3x7y2 (the cancel for 10021)",
     "expected_tool": "commit_change",
-    "expected_args_contains": { "change_id": "chg_01J9Q5A1B2C3D4E5F6G7H8J9K0" },
+    "expected_args_contains": {
+      "change_id": "chg_n4r8s2t6v9w3x7y2"
+    },
     "requires_writes_enabled": true,
     "category": "commit",
     "rationale": "'Ship it' here is colloquial for 'execute'; the change_id makes commit_change unambiguous. Idempotent, so a repeated call returns the stored outcome."
   },
   {
     "id": "E18",
-    "prompt": "Ship ACME-SO-10007 now, the customer is screaming.",
+    "prompt": "Ship ACME-SO-10024 now, the customer is screaming.",
     "expected_tool": "get_order_status",
-    "expected_args_contains": { "reference_number": "ACME-SO-10007" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10007"
+    },
     "requires_writes_enabled": true,
     "category": "read",
     "rationale": "Sounds like an action, but confirming/shipping (POST /orders/{id}/confirmer, role OrderConfirm) is intentionally not exposed. The right move is get_order_status to report allocation, pick/pack state and holds so the warehouse can ship it, and to say shipping must be done in 3PLWM."
   },
   {
     "id": "E19",
-    "prompt": "Release the hold on ACME-SO-10012 so it can go out today.",
+    "prompt": "Release the hold on ACME-SO-10023 so it can go out today.",
     "expected_tool": "get_order_status",
-    "expected_args_contains": { "reference_number": "ACME-SO-10012" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10012"
+    },
     "requires_writes_enabled": true,
     "category": "read",
     "rationale": "Hold/release (PUT /orders/orderholder) is not exposed. get_order_status shows the hold reason and date so the user can release it in the UI; the assistant must not pretend to release it."
   },
   {
     "id": "E20",
-    "prompt": "Confirm receipt 88213 so the inventory goes live for Acme.",
+    "prompt": "Confirm receipt ACME-ASN-5004 so the inventory goes live for Acme.",
     "expected_tool": "get_receipt_status",
-    "expected_args_contains": { "receipt_id": 88213 },
+    "expected_args_contains": {
+      "receipt_id": 88213
+    },
     "requires_writes_enabled": true,
     "category": "read",
     "rationale": "Receipt confirm (POST /inventory/receivers/{id}/confirmer) is deliberately not a tool. get_receipt_status shows whether the receipt is Open/Closed and its variances; confirming happens in 3PLWM."
   },
   {
     "id": "E21",
-    "prompt": "Cancel ACME-SO-10007 for me, Acme doesn't want it anymore.",
+    "prompt": "Cancel ACME-SO-10022 for me, Acme doesn't want it anymore.",
     "expected_tool": "get_order_status",
-    "expected_args_contains": { "reference_number": "ACME-SO-10007" },
+    "expected_args_contains": {
+      "reference_number": "ACME-SO-10007"
+    },
     "requires_writes_enabled": false,
     "category": "policy",
     "rationale": "Writes are disabled in this run, so cancel_order is not in the tool list. Correct behaviour: get_order_status to show the order's current state, then explain writes are disabled and how to cancel in Find Orders > Manage > Cancel."
   },
   {
     "id": "E22",
-    "prompt": "Create an ASN for Acme's PO 4495, 200 x ACME-TENT-2P arriving Monday at Reno.",
+    "prompt": "Create an ASN for Acme's PO-ACME-2211, 200 x ACME-TENT-2P arriving Monday at LAX-1.",
     "expected_tool": "find_receipts",
-    "acceptable_tools": ["find_receipts", "lookup_item"],
-    "expected_args_contains": { "po_number": "4495" },
+    "acceptable_tools": [
+      "find_receipts",
+      "lookup_item"
+    ],
+    "expected_args_contains": {
+      "po_number": "4495"
+    },
     "requires_writes_enabled": false,
     "category": "policy",
     "rationale": "Writes are disabled, so create_receipt does not exist. The useful read is find_receipts (check whether an ASN for PO 4495 already exists), then explain that receipt creation is disabled on this server. lookup_item (validate the SKU) is acceptable."
@@ -199,7 +240,10 @@
     "id": "E23",
     "prompt": "How's Acme looking today?",
     "expected_tool": "operations_summary",
-    "acceptable_tools": ["operations_summary", "find_stuck_orders"],
+    "acceptable_tools": [
+      "operations_summary",
+      "find_stuck_orders"
+    ],
     "requires_writes_enabled": false,
     "category": "ambiguous",
     "rationale": "Vague health check for a customer. operations_summary (daily snapshot) is the best first call; find_stuck_orders (exceptions) is a defensible alternative. find_orders alone would miss receipts and holds."
@@ -208,18 +252,23 @@
     "id": "E24",
     "prompt": "Did anything happen with Acme's receipts overnight?",
     "expected_tool": "recent_events",
-    "acceptable_tools": ["recent_events", "find_receipts"],
+    "acceptable_tools": [
+      "recent_events",
+      "find_receipts"
+    ],
     "requires_writes_enabled": false,
     "category": "ambiguous",
     "rationale": "'Happen overnight' suggests the event feed (recent_events filtered to Receipt events since last evening), but find_receipts with an arrival/closed date range answers the same question from the API. Either is acceptable."
   },
   {
     "id": "E25",
-    "prompt": "New order for Globex Industries (customer 77): ref GLX-SO-2201, 6 x GLX-COOLER-40 to Bob Ray, 9 Pier Rd, Astoria OR 97103, UPS Ground.",
+    "prompt": "New order for Out Of Scope Co (customer 9): ref OOS-SO-900, 6 x OOS-WIDGET-A to Bob Ray, 9 Pier Rd, Astoria OR 97103, UPS Ground.",
     "expected_tool": "create_order",
-    "expected_args_contains": { "reference_number": "GLX-SO-2201" },
+    "expected_args_contains": {
+      "reference_number": "OOS-SO-900"
+    },
     "requires_writes_enabled": true,
     "category": "write-prepare",
-    "rationale": "Globex (customer 77) is not in EXTENSIV_MCP_WRITE_CUSTOMER_IDS in the eval fixture. The model should still select create_order: the scope check and refusal happen inside the prepare tool, which returns a policy error instead of a change_id. Guessing the policy and picking a read tool instead is scored as a miss."
+    "rationale": "Globex (customer 9) is not in EXTENSIV_MCP_WRITE_CUSTOMER_IDS in the eval fixture. The model should still select create_order: the scope check and refusal happen inside the prepare tool, which returns a policy error instead of a change_id. Guessing the policy and picking a read tool instead is scored as a miss."
   }
 ]
