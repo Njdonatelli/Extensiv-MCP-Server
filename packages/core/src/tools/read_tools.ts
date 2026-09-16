@@ -74,7 +74,10 @@ export const findOrders = defineTool({
   inputSchema: z.object({
     customer_id: common.customerId.optional(),
     facility_id: common.facilityId.optional(),
-    statuses: z.array(orderStatusEnum).optional().describe("Order statuses to include. 'closed' means shipped and closed. Default: all."),
+    statuses: z
+      .array(orderStatusEnum)
+      .optional()
+      .describe("Order statuses to include. 'open' = not yet shipped; 'closed' = shipped and closed; 'cancelled' = cancelled. 'complete' exists for warehouse systems that model it separately and behaves like 'open' on Extensiv, which has no such status. Default: all."),
     on_hold: z.boolean().optional().describe('Only orders on hold (true) or not on hold (false).'),
     reference_num: z.string().optional().describe('Exact reference number (the order number the customer knows).'),
     reference_num_contains: z.string().optional().describe('Substring match on reference number.'),
@@ -108,7 +111,19 @@ export const findOrders = defineTool({
       page: input.page,
     });
     const items = customerId ? page.items : page.items.filter((o) => ctx.policy.canReadCustomer(o.customer.id));
-    return { total: page.total, page: page.page, pageSize: page.pageSize, hasMore: page.hasMore, orders: items };
+    const withheld = page.items.length - items.length;
+    return {
+      // `total` counts what the upstream query matched. When this server's read scope
+      // hides some of those rows, saying so beats reporting a number the caller cannot
+      // reconcile with the list beneath it.
+      total: withheld > 0 ? items.length : page.total,
+      upstreamTotal: page.total,
+      withheldByPolicy: withheld,
+      page: page.page,
+      pageSize: page.pageSize,
+      hasMore: page.hasMore,
+      orders: items,
+    };
   },
 });
 
@@ -165,7 +180,10 @@ export const findStuckOrders = defineTool({
       if (o.onHold) groups.on_hold!.push({ order: o, reason: `on hold${o.holdReason ? `: ${o.holdReason}` : ''}` });
       if (ageDays > input.max_age_days) groups.aging!.push({ order: o, reason: `open for ${ageDays.toFixed(1)} days` });
       if (o.earliestShipDate && Date.parse(o.earliestShipDate) < now) groups.past_ship_date!.push({ order: o, reason: `earliest ship date ${o.earliestShipDate} has passed` });
-      if ((o.pickDone === false && o.fullyAllocated) || (o.packDone === false && o.pickDone)) groups.in_progress_stalled!.push({ order: o, reason: 'pick/pack started but not finished' });
+      // Only an order whose pick or pack actually STARTED can be stalled. Keying off
+      // "not done" alone flagged every fully-allocated order that simply had not begun.
+      if (o.pickStarted && !o.pickDone) groups.in_progress_stalled!.push({ order: o, reason: 'picking started but not finished' });
+      else if (o.packStarted && !o.packDone) groups.in_progress_stalled!.push({ order: o, reason: 'packing started but not finished' });
     }
     const counts = Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.length]));
     return { scanned: page.items.length, totalOpen: page.total, truncated: page.hasMore, counts, groups };
@@ -203,7 +221,15 @@ export const checkInventory = defineTool({
       limit: input.limit,
     });
     if (!input.low_stock_only) {
-      return { customerId, facilityId, count: positions.length, positions };
+      return {
+        customerId,
+        facilityId,
+        count: positions.length,
+        // A silently truncated stock list reads as "that is all there is".
+        truncated: positions.length >= input.limit,
+        ...(positions.length >= input.limit ? { truncationNote: `Stopped at the limit of ${input.limit} positions; narrow with skus or sku_contains, or raise limit.` } : {}),
+        positions,
+      };
     }
     const items = await ctx.adapter.findItems({ customerId, activeOnly: true, limit: 1000 });
     const reorder = new Map(items.map((i) => [i.sku, i.reorderPoint]));
@@ -287,7 +313,16 @@ export const findReceipts = defineTool({
       page: input.page,
     });
     const items = page.items.filter((r) => ctx.policy.canReadCustomer(r.customer.id));
-    return { total: page.total, page: page.page, pageSize: page.pageSize, hasMore: page.hasMore, receipts: items };
+    const withheld = page.items.length - items.length;
+    return {
+      total: withheld > 0 ? items.length : page.total,
+      upstreamTotal: page.total,
+      withheldByPolicy: withheld,
+      page: page.page,
+      pageSize: page.pageSize,
+      hasMore: page.hasMore,
+      receipts: items,
+    };
   },
 });
 
@@ -357,7 +392,7 @@ export const operationsSummary = defineTool({
         createdToday: readable(created).length,
         shippedToday: readable(shipped).length,
         cancelledCreatedToday: cancelledCreatedToday.length,
-        openBacklog: open.total,
+        openBacklog: ctx.policy.readCustomerFilter() === undefined ? open.total : openOrders.length,
         openOnHold: openOrders.filter((o) => o.onHold).length,
         openShort: openOrders.filter((o) => o.fullyAllocated === false).length,
         openPastShipDate: openOrders.filter((o) => o.earliestShipDate && Date.parse(o.earliestShipDate) < ctx.clock.now().getTime()).length,
@@ -366,9 +401,12 @@ export const operationsSummary = defineTool({
         expectedToday: readable(receiptsExpected).length,
         overdue: overdueReceipts.length,
         closedToday: closedToday.length,
-        openTotal: receiptsOpen.total,
+        openTotal: ctx.policy.readCustomerFilter() === undefined ? receiptsOpen.total : readable(receiptsOpen).length,
       },
-      events: { sinceStartOfDay: events.length, byType: countBy(events.map((e) => e.eventType)) },
+      events: (() => {
+        const inScope = events.filter((e) => (e.customerId ? ctx.policy.canReadCustomer(e.customerId) : ctx.policy.readCustomerFilter() === undefined));
+        return { sinceStartOfDay: inScope.length, byType: countBy(inScope.map((e) => e.eventType)) };
+      })(),
       truncation: { openOrdersScanned: openOrders.length, openOrdersTotal: open.total, closedReceiptsScanned: receiptsClosed.items.length, closedReceiptsTotal: receiptsClosed.total },
       caveats: [
         'orders.cancelledCreatedToday counts only orders created AND cancelled within the window; the upstream API has no cancellation-date filter, so an older order cancelled today is not counted.',
@@ -404,9 +442,19 @@ export const recentEvents = defineTool({
   handler: async (input, ctx) => {
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
     const events = await ctx.events.query({ since: input.since, eventTypes: input.event_types, customerId, referenceNum: input.reference_num, limit: input.limit });
-    const visible = events.filter((e) => !e.customerId || ctx.policy.canReadCustomer(e.customerId));
-    const unverified = visible.filter((e) => !e.verified).length;
-    return { count: visible.length, unverifiedSignatures: unverified, eventsFile: ctx.config.eventsFile ?? `${ctx.config.stateDir}/events.jsonl`, events: visible.map(({ raw: _raw, ...e }) => e) };
+    // An event whose payload carried no customer link cannot be shown to be in scope, so
+    // when an allow-list is configured it is withheld and only counted. Without an
+    // allow-list every customer is readable and there is nothing to withhold.
+    const scoped = ctx.policy.readCustomerFilter() !== undefined;
+    const visible = events.filter((e) => (e.customerId ? ctx.policy.canReadCustomer(e.customerId) : !scoped));
+    const withheld = events.length - visible.length;
+    return {
+      count: visible.length,
+      withheldUnattributed: withheld,
+      unverifiedSignatures: visible.filter((e) => !e.verified).length,
+      eventsFile: ctx.config.eventsFile ?? `${ctx.config.stateDir}/events.jsonl`,
+      events: visible.map(({ raw: _raw, ...e }) => e),
+    };
   },
 });
 

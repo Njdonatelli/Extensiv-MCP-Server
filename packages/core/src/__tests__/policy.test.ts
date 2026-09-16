@@ -37,6 +37,12 @@ describe('ScopePolicy', () => {
     expect(p.readCustomerFilter()).toEqual(['1']);
   });
 
+  it('refuses a write to a facility outside the read allowlist', () => {
+    const p = new ScopePolicy(loadCoreConfig({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1', EXTENSIV_MCP_ALLOWED_FACILITY_IDS: '1' }));
+    expect(() => p.assertWrite({ customerId: '1', facilityId: '1' }, 'create order')).not.toThrow();
+    expect(() => p.assertWrite({ customerId: '1', facilityId: '2' }, 'create order')).toThrowError(/read scope/);
+  });
+
   it('rejects a writable customer that is not readable', () => {
     const p = new ScopePolicy(loadCoreConfig({ EXTENSIV_MCP_WRITES_ENABLED: 'yes', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '2', EXTENSIV_MCP_ALLOWED_CUSTOMER_IDS: '1' }));
     expect(() => p.assertWrite({ customerId: '2' }, 'x')).toThrowError(/not readable/);

@@ -117,13 +117,15 @@ export class JsonlChangeStore extends MemoryChangeStore {
     await this.load();
     await super.put(record);
     const line = JSON.stringify(record) + '\n';
-    this.queue = this.queue.then(async () => {
+    const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       await fs.appendFile(this.file, line, 'utf8');
       // Count our own write as read, so the next load() does not re-parse it.
       this.bytesRead += Buffer.byteLength(line, 'utf8');
     });
-    return this.queue;
+    // A rejected tail would make every later put() fail with the first error.
+    this.queue = write.catch(() => undefined);
+    return write;
   }
 
   override async list(filter?: { status?: ChangeRecord['status'][] }): Promise<ChangeRecord[]> {

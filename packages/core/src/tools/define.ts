@@ -109,18 +109,24 @@ export async function resolveCustomerRef(ctx: ToolContext, value: string | undef
   }
   const lower = raw.toLowerCase();
   const exact = customers.filter((c) => c.name.toLowerCase() === lower);
-  const partial = exact.length ? exact : customers.filter((c) => c.name.toLowerCase().includes(lower));
-  if (partial.length === 1) {
-    ctx.policy.assertReadCustomer(partial[0]!.id);
-    return partial[0]!.id;
-  }
-  if (partial.length > 1) {
-    throw new WmsError('AMBIGUOUS', `'${raw}' matches ${partial.length} customers.`, {
+  const matches = exact.length ? exact : customers.filter((c) => c.name.toLowerCase().includes(lower));
+  // Narrow by read scope FIRST: a name that is ambiguous across the whole tenant is
+  // often unique within what this server may see, and no error detail may ever name a
+  // customer outside the allow-list.
+  const inScope = ctx.policy.filterCustomers(matches);
+  if (inScope.length === 1) return inScope[0]!.id;
+  if (inScope.length > 1) {
+    throw new WmsError('AMBIGUOUS', `'${raw}' matches ${inScope.length} customers.`, {
       hint: 'Pass the customer id, or a name that matches only one customer.',
-      details: { matches: partial.map((c) => ({ id: c.id, name: c.name })) },
+      details: { matches: inScope.map((c) => ({ id: c.id, name: c.name })) },
     });
   }
-  // An id the credential cannot see is indistinguishable from a typo, so say both.
+  if (matches.length > 0) {
+    // The name matched, but only customers this server may not read.
+    throw new WmsError('SCOPE_DENIED', `'${raw}' matches only customers outside this server's read scope.`, {
+      hint: 'Use describe_scope to see which customers this server may read.',
+    });
+  }
   throw new WmsError('NOT_FOUND', `No customer matches '${raw}'.`, {
     hint: 'Call describe_scope to list the customers this server can see, then use an id or an exact name.',
     details: { visibleCustomers: ctx.policy.filterCustomers(customers).map((c) => ({ id: c.id, name: c.name })) },
@@ -139,20 +145,50 @@ export async function resolveFacilityRef(ctx: ToolContext, value: string | undef
   }
   const lower = raw.toLowerCase();
   const exact = facilities.filter((f) => f.name.toLowerCase() === lower);
-  const partial = exact.length ? exact : facilities.filter((f) => f.name.toLowerCase().includes(lower));
-  if (partial.length === 1) {
-    ctx.policy.assertReadFacility(partial[0]!.id);
-    return partial[0]!.id;
-  }
-  if (partial.length > 1) {
-    throw new WmsError('AMBIGUOUS', `'${raw}' matches ${partial.length} facilities.`, {
+  const matches = exact.length ? exact : facilities.filter((f) => f.name.toLowerCase().includes(lower));
+  const inScope = ctx.policy.filterFacilities(matches);
+  if (inScope.length === 1) return inScope[0]!.id;
+  if (inScope.length > 1) {
+    throw new WmsError('AMBIGUOUS', `'${raw}' matches ${inScope.length} facilities.`, {
       hint: 'Pass the facility id, or a name that matches only one facility.',
-      details: { matches: partial.map((f) => ({ id: f.id, name: f.name })) },
+      details: { matches: inScope.map((f) => ({ id: f.id, name: f.name })) },
+    });
+  }
+  if (matches.length > 0) {
+    throw new WmsError('SCOPE_DENIED', `'${raw}' matches only facilities outside this server's read scope.`, {
+      hint: 'Use describe_scope to see which facilities this server may read.',
     });
   }
   throw new WmsError('NOT_FOUND', `No facility matches '${raw}'.`, {
     hint: 'Call describe_scope to list facilities.',
     details: { visibleFacilities: ctx.policy.filterFacilities(facilities).map((f) => ({ id: f.id, name: f.name })) },
+  });
+}
+
+/**
+ * Resolves an order reference that may be a warehouse id OR the reference number
+ * an operator actually says ("ACME-SO-10026"). Same reasoning as the customer
+ * resolver: without it, every cancel or update costs a lookup round trip first.
+ * Costs one extra GET when the caller passes a reference number; a model turn
+ * costs far more.
+ */
+export async function resolveOrderRef(ctx: ToolContext, value: string, customerId: string | undefined): Promise<string> {
+  const raw = value.trim();
+  if (/^\d+$/.test(raw)) {
+    const byId = await ctx.adapter.getOrder({ id: raw });
+    if (byId) {
+      ctx.policy.assertReadCustomer(byId.customer.id);
+      return byId.id;
+    }
+  }
+  const byRef = await ctx.adapter.getOrder({ referenceNum: raw, customerId });
+  if (byRef) {
+    ctx.policy.assertReadCustomer(byRef.customer.id);
+    return byRef.id;
+  }
+  throw new WmsError('NOT_FOUND', `No order matches '${raw}'.`, {
+    hint: 'Pass the warehouse order id or the exact reference number. find_orders with reference_num_contains will locate it.',
+    details: { tried: raw, customerId },
   });
 }
 

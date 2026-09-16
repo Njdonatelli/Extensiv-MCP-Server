@@ -6,7 +6,7 @@ import { WmsError, isWmsError, toWmsError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { silentLogger } from '../logger.js';
 import { MUTATION_KINDS } from '../mutation.js';
-import type { ChangeRecord, MutationInputMap, MutationKind, MutationOutcome, MutationPlan, PreconditionResult } from '../mutation.js';
+import type { ChangeRecord, ChangeStatus, MutationInputMap, MutationKind, MutationOutcome, MutationPlan, PreconditionResult } from '../mutation.js';
 import type { ScopePolicy } from '../policy.js';
 import type { AuditLog } from '../stores/audit_log.js';
 import { NoopAuditLog } from '../stores/audit_log.js';
@@ -107,20 +107,30 @@ export class MutationEngine {
       }
     }
 
-    if (opts.idempotencyKey) {
-      const existing = await this.store.findByIdempotencyKey(opts.idempotencyKey);
-      if (existing && existing.kind === kind && !this.isExpired(existing, now) && existing.status !== 'discarded') {
-        return this.toPrepareResult(existing, existing.status === 'committed' ? 'already_committed' : 'already_prepared');
-      }
-    }
-
+    // Plan first: the normalized plan input is what the fingerprint and the idempotency
+    // key are compared on, so both checks need it.
     const plan = await this.adapter.planMutation(kind, input);
     this.policy.assertWrite(plan.scope, plan.summary);
     this.enforceBlastRadius(plan);
-
     const fp = fingerprint(kind, plan.input);
+
+    if (opts.idempotencyKey) {
+      const byKey = await this.store.findByIdempotencyKey(opts.idempotencyKey);
+      if (byKey && this.isReusable(byKey, now)) {
+        // An idempotency key names one operation. Reusing it for a different intent is a
+        // caller bug: replaying the earlier plan would silently ignore what was just asked.
+        if (byKey.kind !== kind || byKey.fingerprint !== fp) {
+          throw new WmsError('VALIDATION', `Idempotency key '${opts.idempotencyKey}' was already used for a different request (change ${byKey.id}: ${byKey.plan.summary}).`, {
+            hint: 'Use a new idempotency key for a new request, or omit it to let the engine match on the request itself.',
+            details: { existingChangeId: byKey.id, existingKind: byKey.kind, existingSummary: byKey.plan.summary },
+          });
+        }
+        return this.toPrepareResult(byKey, byKey.status === 'committed' ? 'already_committed' : 'already_prepared');
+      }
+    }
+
     const dup = await this.store.findByFingerprint(fp);
-    if (dup && !this.isExpired(dup, now) && sameTarget(dup.target, this.target())) {
+    if (dup && this.isReusable(dup, now) && sameTarget(dup.target, this.target())) {
       await this.audit.record({ at: now.toISOString(), kind: 'prepare', tool: kind, changeId: dup.id, outcome: 'replayed' });
       return this.toPrepareResult(dup, dup.status === 'committed' ? 'already_committed' : 'already_prepared');
     }
@@ -249,10 +259,16 @@ export class MutationEngine {
           cause: e,
         });
       }
+      // Never mark a change failed once the upstream write landed: a later commit would
+      // then refuse to reconcile it, and the operator would be told nothing happened.
+      if ((rec.status as ChangeStatus) === 'committed') {
+        this.log.error('commit succeeded but post-write bookkeeping failed', { changeId, err: err.message });
+        throw err;
+      }
       rec.status = 'failed';
       rec.error = { code: err.code, message: err.message };
       await this.store.put(rec);
-      await this.audit.record({ at: now.toISOString(), kind: 'commit', tool: 'commit_change', changeId, outcome: 'error', error: rec.error });
+      await this.audit.record({ at: now.toISOString(), kind: 'commit', tool: 'commit_change', changeId, outcome: 'error', error: rec.error }).catch(() => undefined);
       throw err;
     }
   }
@@ -264,14 +280,20 @@ export class MutationEngine {
     rec.error = undefined;
     if (opts.requestedBy) rec.requestedBy = opts.requestedBy;
     await this.store.put(rec);
-    await this.audit.record({
-      at: rec.committedAt,
-      kind: 'commit',
-      tool: 'commit_change',
-      changeId: rec.id,
-      outcome: 'ok',
-      detail: { kind: rec.kind, summary: rec.plan.summary, scope: rec.plan.scope, via: outcome.via, resourceType: outcome.resourceType, resourceId: outcome.resourceId, referenceNum: outcome.referenceNum, upstream: rec.plan.upstream },
-    });
+    // The write already happened and the change store is the authoritative record, so a
+    // failed audit append must not turn a committed change into a reported failure.
+    try {
+      await this.audit.record({
+        at: rec.committedAt,
+        kind: 'commit',
+        tool: 'commit_change',
+        changeId: rec.id,
+        outcome: 'ok',
+        detail: { kind: rec.kind, summary: rec.plan.summary, scope: rec.plan.scope, via: outcome.via, resourceType: outcome.resourceType, resourceId: outcome.resourceId, referenceNum: outcome.referenceNum, upstream: rec.plan.upstream },
+      });
+    } catch (e) {
+      this.log.error('commit succeeded but the audit entry could not be written', { changeId: rec.id, err: String(e) });
+    }
     this.log.info('change committed', { changeId: rec.id, kind: rec.kind, via: outcome.via, resourceId: outcome.resourceId });
     return {
       changeId: rec.id,
@@ -310,6 +332,25 @@ export class MutationEngine {
 
   private isExpired(rec: ChangeRecord, now: Date): boolean {
     return rec.status === 'prepared' && Date.parse(rec.expiresAt) <= now.getTime();
+  }
+
+  /**
+   * Whether an existing change may stand in for a new prepare of the same intent.
+   *
+   * A still-pending change may. A committed one may only for as long as a prepared
+   * change would have lived: beyond that, asking for the same thing again is a new
+   * request, not an accidental double-submit. Without the window, an order that was
+   * created and later cancelled could never be created again under the same reference,
+   * because prepare would keep replaying the original commit and never write.
+   */
+  private isReusable(rec: ChangeRecord, now: Date): boolean {
+    if (rec.status === 'prepared') return !this.isExpired(rec, now);
+    if (rec.status === 'committing' || rec.status === 'outcome_unknown') return true;
+    if (rec.status === 'committed') {
+      const at = Date.parse(rec.committedAt ?? rec.createdAt);
+      return Number.isFinite(at) && now.getTime() - at <= this.cfg.changeTtlSeconds * 1000;
+    }
+    return false;
   }
 
   private enforceBlastRadius(plan: MutationPlan): void {

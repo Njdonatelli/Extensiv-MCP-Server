@@ -1,0 +1,338 @@
+[
+  {
+    "id": "E01",
+    "selected_tool": "verify_connection",
+    "arguments": {},
+    "trajectory": [
+      "verify_connection",
+      "describe_scope"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E02",
+    "selected_tool": "verify_connection",
+    "arguments": {},
+    "trajectory": [
+      "verify_connection",
+      "describe_scope"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E03",
+    "selected_tool": "find_orders",
+    "arguments": {
+      "customer_id": "Acme Outdoor Co",
+      "statuses": [
+        "open"
+      ],
+      "created_after": "2026-09-07",
+      "created_before": "2026-09-14"
+    },
+    "trajectory": [
+      "find_orders"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E04",
+    "selected_tool": "get_order_status",
+    "arguments": {
+      "reference_num": "ACME-SO-10007"
+    },
+    "trajectory": [
+      "get_order_status"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E05",
+    "selected_tool": "find_stuck_orders",
+    "arguments": {
+      "customer_id": "Acme",
+      "max_age_days": 3
+    },
+    "trajectory": [
+      "find_stuck_orders"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E06",
+    "selected_tool": "check_inventory",
+    "arguments": {
+      "customer_id": "Acme Outdoor Co",
+      "facility_id": "LAX-1",
+      "skus": [
+        "ACME-TENT-2P"
+      ],
+      "include_lots": true
+    },
+    "trajectory": [
+      "check_inventory"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E07",
+    "selected_tool": "lookup_item",
+    "arguments": {
+      "sku": "ACME-FILTER-SQZ"
+    },
+    "trajectory": [
+      "lookup_item",
+      "lookup_item"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E08",
+    "selected_tool": "find_receipts",
+    "arguments": {
+      "customer_id": "Acme",
+      "po_num": "PO-ACME-2204"
+    },
+    "trajectory": [
+      "find_receipts",
+      "find_receipts",
+      "get_receipt_status"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E09",
+    "selected_tool": "get_receipt_status",
+    "arguments": {
+      "reference_num": "ACME-ASN-5003"
+    },
+    "trajectory": [
+      "get_receipt_status"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E10",
+    "selected_tool": "operations_summary",
+    "arguments": {
+      "customer_id": "Acme",
+      "facility_id": "LAX-1"
+    },
+    "trajectory": [
+      "operations_summary",
+      "find_orders",
+      "find_orders",
+      "find_orders",
+      "find_orders",
+      "find_receipts"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E11",
+    "selected_tool": "recent_events",
+    "arguments": {
+      "customer_id": "Acme",
+      "event_types": [
+        "OrderConfirm"
+      ],
+      "since": "2026-09-16T01:06:57Z",
+      "limit": 500
+    },
+    "trajectory": [
+      "recent_events"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E12",
+    "selected_tool": "describe_scope",
+    "arguments": {},
+    "trajectory": [
+      "describe_scope",
+      "lookup_item",
+      "lookup_item",
+      "create_order"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E13",
+    "selected_tool": "find_orders",
+    "arguments": {
+      "reference_num": "ACME-SO-10026"
+    },
+    "trajectory": [
+      "find_orders",
+      "get_order_status",
+      "update_order"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E14",
+    "selected_tool": "get_order_status",
+    "arguments": {
+      "reference_num": "ACME-SO-10021"
+    },
+    "trajectory": [
+      "get_order_status",
+      "cancel_order"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E15",
+    "selected_tool": "describe_scope",
+    "arguments": {},
+    "trajectory": [
+      "describe_scope",
+      "lookup_item",
+      "lookup_item",
+      "create_receipt"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E16",
+    "selected_tool": "commit_change",
+    "arguments": {
+      "change_id": "chg_k7m2p9q4r8t3v6w2",
+      "requested_by": "operator@example.com"
+    },
+    "trajectory": [
+      "commit_change"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E17",
+    "selected_tool": "commit_change",
+    "arguments": {
+      "change_id": "chg_n4r8s2t6v9w3x7y2",
+      "requested_by": "operator@example.com"
+    },
+    "trajectory": [
+      "commit_change"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E18",
+    "selected_tool": "get_order_status",
+    "arguments": {
+      "reference_num": "ACME-SO-10024"
+    },
+    "trajectory": [
+      "get_order_status"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E19",
+    "selected_tool": "get_order_status",
+    "arguments": {
+      "reference_num": "ACME-SO-10023"
+    },
+    "trajectory": [
+      "get_order_status"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E20",
+    "selected_tool": "get_receipt_status",
+    "arguments": {
+      "reference_num": "ACME-ASN-5004"
+    },
+    "trajectory": [
+      "get_receipt_status"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  },
+  {
+    "id": "E21",
+    "selected_tool": "get_order_status",
+    "arguments": {
+      "reference_num": "ACME-SO-10022"
+    },
+    "trajectory": [
+      "get_order_status"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E22",
+    "selected_tool": null,
+    "trajectory": [],
+    "writes_enabled": false,
+    "tools_offered": 11,
+    "note": "exit 0; stderr: "
+  },
+  {
+    "id": "E23",
+    "selected_tool": "operations_summary",
+    "arguments": {
+      "customer_id": "Acme"
+    },
+    "trajectory": [
+      "operations_summary",
+      "find_stuck_orders"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E24",
+    "selected_tool": "recent_events",
+    "arguments": {
+      "customer_id": "Acme",
+      "since": "2026-09-15T18:00:00Z",
+      "event_types": [
+        "ReceiptOpen",
+        "ReceiptConfirm",
+        "ReceiptCancel",
+        "ItemReceived"
+      ]
+    },
+    "trajectory": [
+      "recent_events",
+      "find_receipts",
+      "recent_events",
+      "find_receipts"
+    ],
+    "writes_enabled": false,
+    "tools_offered": 11
+  },
+  {
+    "id": "E25",
+    "selected_tool": "describe_scope",
+    "arguments": {},
+    "trajectory": [
+      "describe_scope"
+    ],
+    "writes_enabled": true,
+    "tools_offered": 16
+  }
+]

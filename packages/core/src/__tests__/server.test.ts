@@ -136,3 +136,29 @@ describe('customer and facility references accept a name or an id', () => {
     expect(res.structuredContent.error.code).toBe('SCOPE_DENIED');
   });
 });
+
+describe('order references accept an id or a reference number', () => {
+  it('cancels by reference number without a prior lookup call', async () => {
+    const { client, adapter } = await connect({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const prep = (await client.callTool({ name: 'cancel_order', arguments: { order_id: 'ACME-SO-1', reason: 'customer changed their mind' } })) as { structuredContent: { changeId: string; scope: { customerId: string } }; isError?: boolean };
+    expect(prep.isError).toBeFalsy();
+    expect(prep.structuredContent.scope.customerId).toBe('1');
+    const commit = (await client.callTool({ name: 'commit_change', arguments: { change_id: prep.structuredContent.changeId } })) as { structuredContent: { outcome: { resourceId: string; status: string } } };
+    expect(commit.structuredContent.outcome.resourceId).toBe('1');
+    expect(adapter.orders.get('1')?.status).toBe('cancelled');
+  });
+
+  it('still accepts a numeric warehouse id', async () => {
+    const { client } = await connect({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const prep = (await client.callTool({ name: 'update_order', arguments: { order_id: '1', notes: 'leave at side door' } })) as { structuredContent: { changeId: string }; isError?: boolean };
+    expect(prep.isError).toBeFalsy();
+    expect(prep.structuredContent.changeId).toMatch(/^chg_/);
+  });
+
+  it('returns NOT_FOUND for an unknown order reference', async () => {
+    const { client } = await connect({ EXTENSIV_MCP_WRITES_ENABLED: 'true', EXTENSIV_MCP_WRITE_CUSTOMER_IDS: '1' });
+    const res = (await client.callTool({ name: 'cancel_order', arguments: { order_id: 'NOPE-999', reason: 'testing the failure path' } })) as { structuredContent: { error: { code: string } }; isError?: boolean };
+    expect(res.isError).toBe(true);
+    expect(res.structuredContent.error.code).toBe('NOT_FOUND');
+  });
+});

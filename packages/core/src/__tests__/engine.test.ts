@@ -40,11 +40,31 @@ describe('MutationEngine prepare', () => {
     expect(b.status).toBe('already_prepared');
   });
 
-  it('honours a client idempotency key', async () => {
+  it('returns the same change for the same key and the same intent', async () => {
     const { engine } = setup();
     const a = await engine.prepare('create_order', createInput, { idempotencyKey: 'key-123456' });
-    const b = await engine.prepare('create_order', { ...createInput, referenceNum: 'REF-OTHER' }, { idempotencyKey: 'key-123456' });
+    const b = await engine.prepare('create_order', { ...createInput }, { idempotencyKey: 'key-123456' });
     expect(b.changeId).toBe(a.changeId);
+    expect(b.status).toBe('already_prepared');
+  });
+
+  it('refuses a reused idempotency key that carries a different intent', async () => {
+    const { engine } = setup();
+    await engine.prepare('create_order', createInput, { idempotencyKey: 'key-123456' });
+    await expect(engine.prepare('create_order', { ...createInput, referenceNum: 'REF-OTHER' }, { idempotencyKey: 'key-123456' })).rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('lets the same intent be prepared again once the reuse window has passed', async () => {
+    // An order created and later cancelled must be creatable again under the same
+    // reference; the dedupe window exists to catch double-submits, not to block forever.
+    const { engine, clock, adapter } = setup();
+    const first = await engine.prepare('create_order', createInput);
+    await engine.commit(first.changeId);
+    adapter.orders.clear();
+    clock.advance(901_000);
+    const again = await engine.prepare('create_order', createInput);
+    expect(again.changeId).not.toBe(first.changeId);
+    expect(again.status).toBe('prepared');
   });
 
   it('refuses out-of-scope customers before any planning', async () => {

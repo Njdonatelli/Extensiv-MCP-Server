@@ -36,9 +36,12 @@ export interface WireOrderReadOnly {
   fullyAllocated?: boolean;
   isClosed?: boolean;
   processDate?: string | null;
-  pickStarted?: string | null;
+  // SOURCE: https://3w.extensiv.com/rels/orders/order lists pickStarted / packStarted
+  // among the readOnly flags rather than the dated fields. Accept either shape: a bool
+  // from the documented model, or a timestamp if a tenant returns one.
+  pickStarted?: boolean | string | null;
   pickDoneDate?: string | null;
-  packStarted?: string | null;
+  packStarted?: boolean | string | null;
   packDoneDate?: string | null;
   asnSentDate?: string | null;
   batchIdentifier?: WireIdentifier | null;

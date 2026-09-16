@@ -64,7 +64,9 @@ export interface OrderSummary {
   lineCount: number;
   totalQty: number;
   fullyAllocated?: boolean;
+  pickStarted?: boolean;
   pickDone?: boolean;
+  packStarted?: boolean;
   packDone?: boolean;
   shipToName?: string;
   shipToCity?: string;

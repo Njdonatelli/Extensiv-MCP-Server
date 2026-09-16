@@ -99,16 +99,23 @@ export class JsonlEventStore extends MemoryEventStore {
 
   override async append(event: WmsEvent): Promise<{ inserted: boolean }> {
     await this.refresh();
-    const res = await super.append(event);
-    if (!res.inserted) return res;
+    if (this.ids.has(event.id)) return { inserted: false };
     const line = JSON.stringify(event) + '\n';
-    this.queue = this.queue.then(async () => {
+    // Durability before memory: if the id were recorded first and the append then
+    // failed, the delivery would be lost from disk while the sender's retry came
+    // back as a duplicate and was acknowledged. Claim the id only once it is on disk.
+    const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       await fs.appendFile(this.file, line, 'utf8');
       this.bytesRead += Buffer.byteLength(line, 'utf8');
     });
-    await this.queue;
-    return res;
+    // One failed write must not leave a rejected promise as the queue tail, or every
+    // later append would fail with the first error and never run.
+    this.queue = write.catch(() => undefined);
+    await write;
+    this.ids.add(event.id);
+    this.events.push(structuredClone(event));
+    return { inserted: true };
   }
 
   override async query(q: EventQuery = {}): Promise<WmsEvent[]> {

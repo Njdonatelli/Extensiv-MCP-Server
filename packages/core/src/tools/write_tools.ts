@@ -1,5 +1,5 @@
 import * as z from 'zod/v4';
-import { common, defineTool, resolveCustomerRef, resolveFacilityRef } from './define.js';
+import { common, defineTool, resolveCustomerRef, resolveFacilityRef, resolveOrderRef } from './define.js';
 
 const PREP = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
@@ -77,7 +77,7 @@ export const updateOrder = defineTool({
   kind: 'prepare',
   inputSchema: z
     .object({
-      order_id: z.string().min(1).describe('Warehouse order id from get_order_status or find_orders.'),
+      order_id: z.string().min(1).describe('Warehouse order id OR the order reference number, e.g. "41007" or "ACME-SO-10026".'),
       customer_id: common.customerId.optional(),
       ship_to: addressSchema.partial().optional().describe('Only the fields to change.'),
       carrier: z.string().optional(),
@@ -93,10 +93,11 @@ export const updateOrder = defineTool({
   annotations: PREP,
   handler: async (input, ctx) => {
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
+    const orderId = await resolveOrderRef(ctx, input.order_id, customerId);
     return ctx.engine.prepare(
       'update_order',
       {
-        orderId: input.order_id,
+        orderId,
         customerId,
         shipTo: input.ship_to,
         carrier: input.carrier,
@@ -117,7 +118,7 @@ export const cancelOrder = defineTool({
     'PREPARE cancelling an OPEN outbound order with a reason. Returns a preview (what will be released, current status) and a change_id; NOTHING IS WRITTEN until commit_change. Orders that are already shipped/closed cannot be cancelled through this server; an already-cancelled order commits as a no-op.',
   kind: 'prepare',
   inputSchema: z.object({
-    order_id: z.string().min(1),
+    order_id: z.string().min(1).describe('Warehouse order id OR the order reference number, e.g. "41007" or "ACME-SO-10021".'),
     customer_id: common.customerId.optional(),
     reason: z.string().min(3).max(500).describe('Why the order is being cancelled; recorded in the warehouse.'),
     idempotency_key: idem,
@@ -125,7 +126,8 @@ export const cancelOrder = defineTool({
   annotations: PREP,
   handler: async (input, ctx) => {
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
-    return ctx.engine.prepare('cancel_order', { orderId: input.order_id, customerId, reason: input.reason }, { idempotencyKey: input.idempotency_key });
+    const orderId = await resolveOrderRef(ctx, input.order_id, customerId);
+    return ctx.engine.prepare('cancel_order', { orderId, customerId, reason: input.reason }, { idempotencyKey: input.idempotency_key });
   },
 });
 

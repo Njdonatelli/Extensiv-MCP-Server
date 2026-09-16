@@ -31,14 +31,29 @@ export class MemoryAuditLog implements AuditLog {
 
 export class JsonlAuditLog implements AuditLog {
   private queue: Promise<void> = Promise.resolve();
-  constructor(private readonly file: string) {}
+  /** Number of entries that could not be written, for health reporting. */
+  failedWrites = 0;
+
+  constructor(
+    private readonly file: string,
+    private readonly onError?: (err: unknown, entry: AuditEntry) => void,
+  ) {}
 
   async record(entry: AuditEntry): Promise<void> {
     const line = JSON.stringify(entry) + '\n';
-    this.queue = this.queue.then(async () => {
+    const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       await fs.appendFile(this.file, line, 'utf8');
     });
-    return this.queue;
+    // Keep the tail resolved: a rejected tail would make every later record() fail
+    // with the first error, silently disabling the audit log for the process.
+    this.queue = write.catch(() => undefined);
+    try {
+      await write;
+    } catch (err) {
+      this.failedWrites += 1;
+      this.onError?.(err, entry);
+      throw err;
+    }
   }
 }

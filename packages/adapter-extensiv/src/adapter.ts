@@ -1049,6 +1049,13 @@ export class ExtensivAdapter implements WmsAdapter {
       return { sku: item?.sku ?? l.sku, description: item?.description, qty: l.qty, qualifier: l.qualifier, lotNumber: l.lotNumber, expirationDate: l.expirationDate };
     });
     const totalUnits = input.lines.reduce((s, l) => s + l.qty, 0);
+    // The documented ReceiverCreate body has no supplier address. It does have a `shipTo`
+    // contact block, but what that means on an inbound receipt is not documented, and
+    // guessing would write a real address into the wrong field in production. Say so
+    // rather than showing the operator a preview field that is silently dropped.
+    if (input.supplier && Object.values(input.supplier).some((v) => v !== undefined && v !== '')) {
+      warnings.push('A supplier address was given but Extensiv receipts have no documented supplier field, so it will NOT be recorded. Put it in notes if the warehouse needs it.');
+    }
 
     // SOURCE https://3w.extensiv.com/rels/inventory/receivers (POST body).
     const body = {
@@ -1078,7 +1085,6 @@ export class ExtensivAdapter implements WmsAdapter {
         referenceNum: input.referenceNum,
         poNum: input.poNum,
         expectedDate: input.expectedDate,
-        supplier: input.supplier,
         lineCount: input.lines.length,
         totalUnits,
         lines: previewLines,
@@ -1153,6 +1159,17 @@ export class ExtensivAdapter implements WmsAdapter {
         const id = await this.orderIdByReference(input.referenceNum, input.customerId);
         if (id === null) return null;
         const order = await this.getOrder({ id });
+        // A reference number is unique per customer, so an order carrying ours is either
+        // the one our own write created or someone else's. Reporting the latter as "already
+        // applied" would tell the operator their order exists when what exists is a
+        // different order under the same reference. Verify the content before claiming it.
+        const mismatch = describeOrderMismatch(input, order);
+        if (mismatch) {
+          throw new WmsError('PRECONDITION_FAILED', `An order with reference ${input.referenceNum} already exists for customer ${input.customerId}, but it does not match this request: ${mismatch}.`, {
+            hint: 'Someone or something else created that reference. Inspect it with get_order_status, then either use a different reference number or cancel the existing order.',
+            details: { existingOrderId: id, existingLineCount: order?.lineCount, existingTotalQty: order?.totalQty, requestedLineCount: input.lines.length, requestedTotalQty: input.lines.reduce((t, l) => t + l.qty, 0) },
+          });
+        }
         return {
           resourceType: 'order',
           resourceId: id,
@@ -1168,6 +1185,13 @@ export class ExtensivAdapter implements WmsAdapter {
         const id = await this.receiptIdByReference(input.referenceNum, input.customerId);
         if (id === null) return null;
         const receipt = await this.getReceipt({ id });
+        const rMismatch = describeReceiptMismatch(input, receipt);
+        if (rMismatch) {
+          throw new WmsError('PRECONDITION_FAILED', `A receipt with reference ${input.referenceNum} already exists for customer ${input.customerId}, but it does not match this request: ${rMismatch}.`, {
+            hint: 'Inspect it with get_receipt_status, then either use a different reference number or cancel the existing receipt.',
+            details: { existingReceiptId: id, existingLineCount: receipt?.lineCount, requestedLineCount: input.lines.length },
+          });
+        }
         return {
           resourceType: 'receipt',
           resourceId: id,
@@ -1305,6 +1329,42 @@ export class ExtensivAdapter implements WmsAdapter {
  * package, the evals) stay adapter-agnostic and can substitute any other adapter
  * for the same variable. The class itself is exported for anyone who needs it.
  */
+/**
+ * Compares an existing order against the request that claims to have created it.
+ * Returns a human reason when they differ, or undefined when the existing order is
+ * consistent with the request. Deliberately compares only what the request controls:
+ * the warehouse adds ids, dates and allocations of its own.
+ */
+function describeOrderMismatch(input: CreateOrderInput, order: OrderDetail | null): string | undefined {
+  if (!order) return 'the existing order could not be read back';
+  const wantQty = new Map<string, number>();
+  for (const l of input.lines) wantQty.set(l.sku.toUpperCase(), (wantQty.get(l.sku.toUpperCase()) ?? 0) + l.qty);
+  const gotQty = new Map<string, number>();
+  for (const l of order.lines) gotQty.set(l.sku.toUpperCase(), (gotQty.get(l.sku.toUpperCase()) ?? 0) + l.qtyOrdered);
+  if (wantQty.size !== gotQty.size) return `it has ${gotQty.size} distinct SKUs, this request has ${wantQty.size}`;
+  for (const [sku, qty] of wantQty) {
+    const got = gotQty.get(sku);
+    if (got === undefined) return `it does not contain SKU ${sku}`;
+    if (got !== qty) return `SKU ${sku} is ${got} units on the existing order and ${qty} in this request`;
+  }
+  return undefined;
+}
+
+function describeReceiptMismatch(input: CreateReceiptInput, receipt: ReceiptDetail | null): string | undefined {
+  if (!receipt) return 'the existing receipt could not be read back';
+  const want = new Map<string, number>();
+  for (const l of input.lines) want.set(l.sku.toUpperCase(), (want.get(l.sku.toUpperCase()) ?? 0) + l.qty);
+  const got = new Map<string, number>();
+  for (const l of receipt.lines) got.set(l.sku.toUpperCase(), (got.get(l.sku.toUpperCase()) ?? 0) + l.qtyExpected);
+  if (want.size !== got.size) return `it has ${got.size} distinct SKUs, this request has ${want.size}`;
+  for (const [sku, qty] of want) {
+    const g = got.get(sku);
+    if (g === undefined) return `it does not contain SKU ${sku}`;
+    if (g !== qty) return `SKU ${sku} expects ${g} units on the existing receipt and ${qty} in this request`;
+  }
+  return undefined;
+}
+
 export function createExtensivAdapter(cfg: ExtensivConfig, deps: ExtensivAdapterDeps = {}): WmsAdapter {
   return new ExtensivAdapter(cfg, deps);
 }

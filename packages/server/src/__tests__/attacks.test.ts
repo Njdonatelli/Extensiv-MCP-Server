@@ -110,17 +110,29 @@ describe('replay and idempotency', () => {
     expect(commits.map((e) => e.outcome)).toEqual(['ok', 'replayed']);
   });
 
-  it('preparing twice with the same idempotency_key returns the same change_id', async () => {
+  it('the same idempotency_key with the same intent returns the same change_id', async () => {
     const stack = await stackFor(WRITES_ON);
     const key = 'attack-idempotency-key-0001';
     const first = await call<PrepareShape>(stack.client, 'create_order', orderArgs('ATK-SO-IDEM-A', { idempotency_key: key }));
     expect(first.status).toBe('prepared');
 
-    // A different reference number under the same key must not produce a second plan.
-    const second = await call<PrepareShape>(stack.client, 'create_order', orderArgs('ATK-SO-IDEM-B', { idempotency_key: key }));
-    expect(second.changeId).toBe(first.changeId);
-    expect(second.status).toBe('already_prepared');
-    expect(second.preview.referenceNum).toBe('ATK-SO-IDEM-A');
+    const again = await call<PrepareShape>(stack.client, 'create_order', orderArgs('ATK-SO-IDEM-A', { idempotency_key: key }));
+    expect(again.changeId).toBe(first.changeId);
+    expect(again.status).toBe('already_prepared');
+
+    const writes = (await mockRequests(stack.mock.url)).filter(isUpstreamWrite);
+    expect(writes).toEqual([]);
+  });
+
+  it('the same idempotency_key with a DIFFERENT intent is refused rather than silently replayed', async () => {
+    const stack = await stackFor(WRITES_ON);
+    const key = 'attack-idempotency-key-0002';
+    await call<PrepareShape>(stack.client, 'create_order', orderArgs('ATK-SO-IDEM-C', { idempotency_key: key }));
+
+    // Returning the first plan here would quietly discard what the operator just asked for.
+    const err = await callExpectingError(stack.client, 'create_order', orderArgs('ATK-SO-IDEM-D', { idempotency_key: key }));
+    expect(err.code).toBe('VALIDATION');
+    expect(err.message).toContain('already used for a different request');
 
     const writes = (await mockRequests(stack.mock.url)).filter(isUpstreamWrite);
     expect(writes).toEqual([]);

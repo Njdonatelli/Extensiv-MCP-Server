@@ -286,6 +286,13 @@ export function orderItemsOf(w: WireOrder): WireOrderItem[] {
   return emb.length > 0 ? emb : (w.orderItems ?? []);
 }
 
+
+/** pickStarted / packStarted are documented as flags but may arrive as timestamps. */
+function flagOrDate(v: boolean | string | null | undefined): boolean {
+  if (typeof v === 'boolean') return v;
+  return str(v) !== undefined;
+}
+
 export function toOrderSummary(w: WireOrder, names?: RefMaps): OrderSummary {
   const ro = w.readOnly;
   const items = orderItemsOf(w);
@@ -311,7 +318,9 @@ export function toOrderSummary(w: WireOrder, names?: RefMaps): OrderSummary {
     lineCount: items.length,
     totalQty: items.length > 0 ? items.reduce((s, i) => s + (num(i.qty) ?? 0), 0) : (num(w.numUnits1) ?? 0),
     fullyAllocated: ro?.fullyAllocated,
+    pickStarted: flagOrDate(ro?.pickStarted),
     pickDone: str(ro?.pickDoneDate) !== undefined,
+    packStarted: flagOrDate(ro?.packStarted),
     packDone: str(ro?.packDoneDate) !== undefined,
     shipToName: str(w.shipTo?.name) ?? str(w.shipTo?.companyName),
     shipToCity: str(w.shipTo?.city),

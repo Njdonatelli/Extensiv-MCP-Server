@@ -443,11 +443,19 @@ describe('checkPreconditions', () => {
 });
 
 describe('findApplied', () => {
-  it('reports an existing order for a create plan whose reference number is already taken', async () => {
-    const { adapter } = mk([ordersList(() => [{ readOnly: { orderId: 1001 } }]), ordersById({ '1001': { body: openOrder(), etag: ETAG_1001 } })]);
-    const plan = await adapter.planMutation('create_order', createOrderInput());
+  it('reports an existing order for a create plan whose reference number is already taken AND whose lines match', async () => {
+    const { adapter } = mk([ordersList(() => [{ readOnly: { orderId: 1001 } }]), ordersById({ '1001': { body: openOrder(), etag: ETAG_1001 } }), stockRoute()]);
+    const plan = await adapter.planMutation('create_order', createOrderInput({ lines: [{ sku: 'WIDGET-BLUE', qty: 10 }, { sku: 'WIDGET-RED', qty: 20 }] }));
     const applied = await adapter.findApplied(plan);
     expect(applied).toMatchObject({ resourceType: 'order', resourceId: '1001', referenceNum: 'PO-NEW-1', status: 'open', version: ETAG_1001, via: 'found_existing' });
+  });
+
+  it('refuses to claim an order that holds the reference number but different lines', async () => {
+    // Reference numbers are unique per customer, so this is someone else's order. Calling
+    // it "already applied" would tell the operator their order exists when it does not.
+    const { adapter } = mk([ordersList(() => [{ readOnly: { orderId: 1001 } }]), ordersById({ '1001': { body: openOrder(), etag: ETAG_1001 } }), stockRoute()]);
+    const plan = await adapter.planMutation('create_order', createOrderInput());
+    await expect(adapter.findApplied(plan)).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 
   it('returns null when the reference number is free', async () => {
@@ -504,7 +512,7 @@ describe('executeMutation', () => {
       ordersList((ctx) => (created && ctx.query.get('rql')?.includes('PO-NEW-1') ? [{ readOnly: { orderId: 7777 } }] : [])),
       ordersById({ '7777': { body: { ...openOrder(), readOnly: { ...openOrder().readOnly, orderId: 7777 }, referenceNum: 'PO-NEW-1' }, etag: 'etag-7777' } }),
     ]);
-    const plan = await adapter.planMutation('create_order', createOrderInput());
+    const plan = await adapter.planMutation('create_order', createOrderInput({ lines: [{ sku: 'WIDGET-BLUE', qty: 10 }, { sku: 'WIDGET-RED', qty: 20 }] }));
     const outcome = await adapter.executeMutation(plan);
     expect(outcome).toMatchObject({ resourceType: 'order', resourceId: '7777', referenceNum: 'PO-NEW-1', via: 'found_existing', version: 'etag-7777' });
   });

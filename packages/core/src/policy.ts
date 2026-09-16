@@ -104,10 +104,19 @@ export class ScopePolicy {
         details: { facilityId: scope.facilityId, writableFacilityIds: [...this.writeFacilities] },
       });
     }
-    // Read scope is a superset of write scope by construction: a customer you may write you may read.
+    // Read scope is a superset of write scope by construction: whatever you may write you
+    // may read. Without the facility half of this check, a narrow read allow-list could be
+    // paired with an empty write-facility list and writes would land in a warehouse the
+    // same server refuses to show you.
     if (!this.canReadCustomer(scope.customerId)) {
       throw new WmsError('SCOPE_DENIED', `Customer ${scope.customerId} is writable but not readable; configuration is inconsistent.`, {
         hint: 'Add the customer to EXTENSIV_MCP_ALLOWED_CUSTOMER_IDS or clear that variable.',
+      });
+    }
+    if (scope.facilityId !== undefined && !this.canReadFacility(scope.facilityId)) {
+      throw new WmsError('SCOPE_DENIED', `Facility ${scope.facilityId} is outside this server's read scope, so it may not be written either; refusing to ${action}.`, {
+        hint: 'Add the facility to EXTENSIV_MCP_ALLOWED_FACILITY_IDS, or clear that variable, or name a facility this server can read.',
+        details: { facilityId: scope.facilityId },
       });
     }
   }
