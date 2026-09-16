@@ -38,6 +38,7 @@ import type {
   WireOrderItem,
   WireOrderReadOnly,
   WirePackage,
+  WirePackageContent,
   WireReceiveItem,
   WireReceiver,
   WireStockDetail,
@@ -250,10 +251,40 @@ function allocatedQty(item: WireOrderItem): number | undefined {
  * Packed quantity per order item, from `readOnly.packages[].packageContents[]`
  * (SOURCE https://3w.extensiv.com/rels/orders/package for the content shape).
  */
+
+/**
+ * Packages and their contents arrive in two documented shapes and the rel pages do not
+ * say which one `detail=Packages` fills in: the order model carries `readOnly.packages[]`
+ * (https://3w.extensiv.com/rels/orders/order) while the packages sub-resource carries
+ * `_embedded["…/orders/package"]` with contents under `_embedded["…/orders/packagecontent"]`
+ * (https://3w.extensiv.com/rels/orders/packages). Reading only one shape silently produced
+ * zero packages and undefined packed quantities against a tenant that returns the other,
+ * so both are read and merged by package id.
+ * INFERRED: which shape a given tenant returns.
+ */
+export function packagesOf(w: WireOrder): WirePackage[] {
+  const fromReadOnly = w.readOnly?.packages ?? [];
+  const fromEmbedded = embedded<WirePackage>(w, REL.orderPackage);
+  const byId = new Map<string, WirePackage>();
+  for (const p of [...fromReadOnly, ...fromEmbedded]) {
+    const key = p.packageId !== undefined && p.packageId !== null ? String(p.packageId) : `anon-${byId.size}`;
+    const existing = byId.get(key);
+    // Merge rather than replace: one shape may carry contents the other omits.
+    byId.set(key, existing ? { ...existing, ...p, packageContents: packageContentsOf(p).length ? packageContentsOf(p) : packageContentsOf(existing) } : p);
+  }
+  return [...byId.values()];
+}
+
+export function packageContentsOf(p: WirePackage): WirePackageContent[] {
+  const flat = p.packageContents ?? [];
+  if (flat.length) return flat;
+  return embedded<WirePackageContent>(p, REL.orderPackageContent);
+}
+
 function packedQtyByOrderItem(packages: WirePackage[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const p of packages) {
-    for (const c of p.packageContents ?? []) {
+    for (const c of packageContentsOf(p)) {
       const key = c.orderItemId !== undefined ? String(c.orderItemId) : undefined;
       if (key === undefined) continue;
       out.set(key, (out.get(key) ?? 0) + (num(c.qty) ?? 0));
@@ -334,14 +365,14 @@ export function toPackage(p: WirePackage): Package {
     trackingNumber: str(p.trackingNumber),
     weight: num(p.weight),
     // weightUnit is deliberately omitted: no rel page states the unit of package weight.
-    skus: (p.packageContents ?? []).map((c) => ({ sku: nameOf(c.itemIdentifier) ?? '', qty: num(c.qty) ?? 0 })),
+    skus: packageContentsOf(p).map((c) => ({ sku: nameOf(c.itemIdentifier) ?? '', qty: num(c.qty) ?? 0 })),
   };
 }
 
 export function toOrderDetail(w: WireOrder, opts: { version?: string; names?: RefMaps } = {}): OrderDetail {
   const ro = w.readOnly;
   const summary = toOrderSummary(w, opts.names);
-  const packages = ro?.packages ?? [];
+  const packages = packagesOf(w);
   const packed = packedQtyByOrderItem(packages);
   const shipped = summary.shippedAt !== undefined;
   const lines = orderItemsOf(w).map((item) => {

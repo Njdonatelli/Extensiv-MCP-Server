@@ -120,8 +120,8 @@ export class JsonlChangeStore extends MemoryChangeStore {
     const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       await fs.appendFile(this.file, line, 'utf8');
-      // Count our own write as read, so the next load() does not re-parse it.
-      this.bytesRead += Buffer.byteLength(line, 'utf8');
+      // Deliberately NOT advancing bytesRead: with a second writer on this file the offset
+      // our line landed at is unknown. load() rediscovers it; last write for an id wins.
     });
     // A rejected tail would make every later put() fail with the first error.
     this.queue = write.catch(() => undefined);

@@ -75,11 +75,31 @@ export function verifyOnce(key: KeyObject, rawBody: Buffer, signatureB64: string
   }
 }
 
-export async function verifySignature(source: KeySource, rawBody: Buffer, signatureB64: string | undefined): Promise<'valid' | 'invalid' | 'missing'> {
+/**
+ * A forced re-fetch happens at most once per cooldown. Without it, a burst of invalid
+ * deliveries (a misconfigured sender, or anyone who can reach the URL) would trigger one
+ * outbound key fetch per request, inside the 3-second window Extensiv allows for a reply.
+ */
+const REFETCH_COOLDOWN_MS = 60_000;
+let lastForcedFetch = 0;
+
+export async function verifySignature(
+  source: KeySource,
+  rawBody: Buffer,
+  signatureB64: string | undefined,
+  now: () => number = Date.now,
+): Promise<'valid' | 'invalid' | 'missing'> {
   if (!signatureB64) return 'missing';
   const key = await source.getKey();
   if (verifyOnce(key, rawBody, signatureB64)) return 'valid';
-  // Key may have rotated: fetch fresh and try once more.
+  if (now() - lastForcedFetch < REFETCH_COOLDOWN_MS) return 'invalid';
+  lastForcedFetch = now();
+  // The key may have rotated: fetch fresh and try once more.
   const fresh = await source.getKey(true);
   return verifyOnce(fresh, rawBody, signatureB64) ? 'valid' : 'invalid';
+}
+
+/** Test hook: the cooldown is process-wide state. */
+export function resetSignatureCooldown(): void {
+  lastForcedFetch = 0;
 }

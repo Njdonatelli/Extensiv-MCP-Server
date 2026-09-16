@@ -1,10 +1,10 @@
 import { generateKeyPairSync, createSign } from 'node:crypto';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { MemoryEventStore, silentLogger } from '@mcp-3pl/core';
 import { createIngestApp } from '../app.js';
 import { loadIngestConfig } from '../config.js';
 import { parseWebhook, toIsoUtc } from '../parse.js';
-import { PinnedKeySource, RemoteKeySource } from '../signature.js';
+import { PinnedKeySource, RemoteKeySource, resetSignatureCooldown } from '../signature.js';
 
 const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const pem = publicKey.export({ type: 'spki', format: 'pem' }) as string;
@@ -48,6 +48,9 @@ describe('parseWebhook', () => {
 
 describe('ingest app', () => {
   const config = loadIngestConfig({ EXTENSIV_WEBHOOK_PORT: '1', EXTENSIV_BASE_URL: 'http://mock' });
+
+  // The forced key re-fetch is rate limited with process-wide state.
+  beforeEach(() => resetSignatureCooldown());
 
   it('stores a validly signed delivery once and flags the duplicate', async () => {
     const store = new MemoryEventStore();
@@ -100,5 +103,39 @@ describe('ingest app', () => {
     const body = JSON.stringify(sample);
     expect((await app.request(cfg.path, { method: 'POST', headers: { Signature: sign(body) }, body })).status).toBe(401);
     expect((await app.request(cfg.path, { method: 'POST', headers: { Signature: sign(body), Authorization: 'Bearer sekret' }, body })).status).toBe(200);
+  });
+});
+
+describe('signature re-fetch cooldown', () => {
+  beforeEach(() => resetSignatureCooldown());
+
+  it('re-fetches the key at most once per cooldown under a flood of bad signatures', async () => {
+    let fetches = 0;
+    const fetchImpl = (async () => {
+      fetches += 1;
+      return new Response(JSON.stringify({ publicKey: pem, retrievalDateISO: '2026-01-01T00:00:00Z' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as typeof fetch;
+    const cfg = loadIngestConfig({ EXTENSIV_BASE_URL: 'http://mock' });
+    const keySource = new RemoteKeySource('http://mock', 60_000, silentLogger, fetchImpl);
+    const { app } = createIngestApp({ config: cfg, store: new MemoryEventStore(), keySource, logger: silentLogger });
+    const body = JSON.stringify(sample);
+    const other = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+    for (let i = 0; i < 5; i += 1) {
+      const res = await app.request(cfg.path, { method: 'POST', headers: { Signature: sign(body, other) }, body });
+      expect(res.status).toBe(401);
+    }
+    // One cached fetch plus one forced re-fetch, not one per request.
+    expect(fetches).toBe(2);
+  });
+
+  it('refuses an oversized body and a non-object JSON body without retry-worthy errors', async () => {
+    const cfg = loadIngestConfig({ EXTENSIV_BASE_URL: 'http://mock' });
+    const { app } = createIngestApp({ config: cfg, store: new MemoryEventStore(), keySource: new PinnedKeySource(pem), logger: silentLogger });
+    const big = 'x'.repeat(3 * 1024 * 1024);
+    const tooBig = await app.request(cfg.path, { method: 'POST', headers: { Signature: sign(big) }, body: big });
+    expect(tooBig.status).toBe(413);
+    const notObject = JSON.stringify('just a string');
+    const bad = await app.request(cfg.path, { method: 'POST', headers: { Signature: sign(notObject) }, body: notObject });
+    expect(bad.status).toBe(400);
   });
 });

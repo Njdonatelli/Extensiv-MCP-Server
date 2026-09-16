@@ -229,3 +229,43 @@ describe('inventory mapping', () => {
     expect(positions[1]!.lots).toBeUndefined();
   });
 });
+
+describe('package shapes', () => {
+  // The rel pages document two shapes and do not say which one detail=Packages returns.
+  const contents = [{ orderItemId: 9001, qty: 3, itemIdentifier: { sku: 'WIDGET-BLUE' } }];
+
+  it('reads packages and contents from readOnly.packages with a flat packageContents', () => {
+    const w = { ...openOrder(), readOnly: { ...openOrder().readOnly, packages: [{ packageId: 5, trackingNumber: 'TRK-1', weight: 2, packageContents: contents }] } } as WireOrder;
+    const d = toOrderDetail(w);
+    expect(d.packages).toHaveLength(1);
+    expect(d.packages[0]).toMatchObject({ id: '5', trackingNumber: 'TRK-1' });
+    expect(d.packages[0]?.skus).toEqual([{ sku: 'WIDGET-BLUE', qty: 3 }]);
+  });
+
+  it('reads the same information from the embedded rel keys', () => {
+    const w = {
+      ...openOrder(),
+      readOnly: { ...openOrder().readOnly, packages: undefined },
+      _embedded: {
+        ...(openOrder()._embedded ?? {}),
+        'http://api.3plCentral.com/rels/orders/package': [
+          { packageId: 5, trackingNumber: 'TRK-1', weight: 2, _embedded: { 'http://api.3plCentral.com/rels/orders/packagecontent': contents } },
+        ],
+      },
+    } as unknown as WireOrder;
+    const d = toOrderDetail(w);
+    expect(d.packages).toHaveLength(1);
+    expect(d.packages[0]).toMatchObject({ id: '5', trackingNumber: 'TRK-1' });
+    expect(d.packages[0]?.skus).toEqual([{ sku: 'WIDGET-BLUE', qty: 3 }]);
+  });
+
+  it('does not double-count a package that appears in both shapes', () => {
+    const pkg = { packageId: 5, trackingNumber: 'TRK-1', weight: 2, packageContents: contents };
+    const w = {
+      ...openOrder(),
+      readOnly: { ...openOrder().readOnly, packages: [pkg] },
+      _embedded: { ...(openOrder()._embedded ?? {}), 'http://api.3plCentral.com/rels/orders/package': [pkg] },
+    } as unknown as WireOrder;
+    expect(toOrderDetail(w).packages).toHaveLength(1);
+  });
+});

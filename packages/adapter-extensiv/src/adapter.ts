@@ -712,13 +712,20 @@ export class ExtensivAdapter implements WmsAdapter {
     const out = new Map<string, Item>();
     if (unique.length === 0) return out;
     const customer = (await this.listCustomers()).find((c) => c.id === String(customerId));
-    const res = await this.get(`/customers/${encodeURIComponent(customerId)}/items`, {
-      rql: inList('sku', unique),
-      pgsiz: clamp(unique.length * 2, 10, MAX_PGSIZ.items),
-    });
-    for (const w of embedded<WireItem>(res.body, REL.customerItem)) {
-      const item = toItem(w, customer ? { id: customer.id, name: customer.name } : undefined);
-      if (item.sku !== '') out.set(item.sku.toUpperCase(), item);
+    // SOURCE https://3w.extensiv.com/rels/customers/items: pgsiz limit 100 on this rel. Asking
+    // for more SKUs than one page holds returned a truncated set, which the caller could only
+    // read as "these SKUs do not exist". Batch instead.
+    const batchSize = Math.max(1, Math.floor(MAX_PGSIZ.items / 2));
+    for (let i = 0; i < unique.length; i += batchSize) {
+      const batch = unique.slice(i, i + batchSize);
+      const res = await this.get(`/customers/${encodeURIComponent(customerId)}/items`, {
+        rql: inList('sku', batch),
+        pgsiz: clamp(batch.length * 2, 10, MAX_PGSIZ.items),
+      });
+      for (const w of embedded<WireItem>(res.body, REL.customerItem)) {
+        const item = toItem(w, customer ? { id: customer.id, name: customer.name } : undefined);
+        if (item.sku !== '') out.set(item.sku.toUpperCase(), item);
+      }
     }
     return out;
   }
@@ -992,6 +999,17 @@ export class ExtensivAdapter implements WmsAdapter {
       });
     }
     const already = order.status === 'cancelled';
+    const versionForCancel = order.version ?? '';
+    // SOURCE https://3w.extensiv.com/rels/orders/ordercancel: If-Match is required. Sending
+    // the request without it earns a 428, and cancelling with no concurrency token would mean
+    // cancelling an order that may have changed since the preview. Refuse while nothing is
+    // at stake instead. An already-cancelled order needs no token: the commit is a no-op.
+    if (!already && versionForCancel === '') {
+      throw new WmsError('PRECONDITION_FAILED', `Could not read a version token (ETag) for order ${order.id}, and cancelling requires one.`, {
+        hint: 'Re-run get_order_status for this order and try again. If the version is still missing, the upstream response is not returning an ETag and cancelling through this server is unsafe.',
+        details: { orderId: order.id, referenceNum: order.referenceNum },
+      });
+    }
     const warnings = already ? [`Order ${order.id} (${order.referenceNum}) is already cancelled upstream; committing will confirm that and call nothing.`] : [];
     if (!already && order.trackingNumbers.length > 0) {
       warnings.push(`Order ${order.id} already has tracking number(s) ${order.trackingNumbers.join(', ')}; cancelling may strand a label.`);
@@ -1022,6 +1040,8 @@ export class ExtensivAdapter implements WmsAdapter {
       naturalKey: { type: 'order.cancelled', value: order.id },
       // SOURCE https://3w.extensiv.com/rels/orders/ordercancel: POST /orders/{id}/canceler,
       // If-Match required, 204 No Content, body { reason }.
+      // The guard above refuses to build this request without a version, so the header is
+      // only conditional for the already-cancelled no-op path.
       upstream: [{ method: 'POST', path: `/orders/${encodeURIComponent(order.id)}/canceler`, body: { reason: input.reason }, headers: version !== '' ? { 'If-Match': version } : {} }],
       risk: 'high',
       // A cancel of an already-cancelled order is a no-op, so a replay cannot do harm.

@@ -24,11 +24,25 @@ export interface EventStore {
 export class MemoryEventStore implements EventStore {
   protected readonly events: WmsEvent[] = [];
   protected readonly ids = new Set<string>();
+  /**
+   * Events are a rolling window, not an archive: the JSONL file is the archive. Without a
+   * cap, a busy tenant grows the resident set of both the ingest process and every server
+   * session without bound. Oldest entries are dropped from memory only.
+   */
+  protected readonly maxResident = 20_000;
+
+  protected trim(): void {
+    while (this.events.length > this.maxResident) {
+      const dropped = this.events.shift();
+      if (dropped) this.ids.delete(dropped.id);
+    }
+  }
 
   async append(event: WmsEvent): Promise<{ inserted: boolean }> {
     if (this.ids.has(event.id)) return { inserted: false };
     this.ids.add(event.id);
     this.events.push(structuredClone(event));
+    this.trim();
     return { inserted: true };
   }
 
@@ -86,6 +100,7 @@ export class JsonlEventStore extends MemoryEventStore {
             this.ids.add(ev.id);
             this.events.push(ev);
           }
+          this.trim();
         } catch {
           // skip torn line
         }
@@ -107,7 +122,9 @@ export class JsonlEventStore extends MemoryEventStore {
     const write = this.queue.then(async () => {
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       await fs.appendFile(this.file, line, 'utf8');
-      this.bytesRead += Buffer.byteLength(line, 'utf8');
+      // Deliberately NOT advancing bytesRead: another writer may have appended between
+      // our read and our write, so the offset our line landed at is unknown. refresh()
+      // rediscovers it and dedupes on id.
     });
     // One failed write must not leave a rejected promise as the queue tail, or every
     // later append would fail with the first error and never run.
@@ -115,6 +132,7 @@ export class JsonlEventStore extends MemoryEventStore {
     await write;
     this.ids.add(event.id);
     this.events.push(structuredClone(event));
+    this.trim();
     return { inserted: true };
   }
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { EventStore, Logger } from '@mcp-3pl/core';
 import type { IngestConfig } from './config.js';
-import { parseWebhook, type ExtensivWebhookBody } from './parse.js';
+import { isWebhookBody, parseWebhook, type ExtensivWebhookBody } from './parse.js';
 import { verifySignature, type KeySource } from './signature.js';
 
 export interface IngestDeps {
@@ -11,6 +11,9 @@ export interface IngestDeps {
   logger: Logger;
   clock?: () => Date;
 }
+
+/** Generous next to the documented payload, small enough to refuse abuse. */
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 export interface IngestStats {
   received: number;
@@ -45,7 +48,18 @@ export function createIngestApp(deps: IngestDeps): { app: Hono; stats: IngestSta
         return c.json({ error: 'unauthorized' }, 401);
       }
     }
+    // Bound the body before any work: the endpoint is public by necessity, and a documented
+    // delivery is a few kilobytes even with the resource included.
+    const declared = Number(c.req.header('content-length') ?? '0');
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+      stats.malformed += 1;
+      return c.json({ error: 'body too large' }, 413);
+    }
     const raw = Buffer.from(await c.req.arrayBuffer());
+    if (raw.length > MAX_BODY_BYTES) {
+      stats.malformed += 1;
+      return c.json({ error: 'body too large' }, 413);
+    }
     const signature = c.req.header('signature') ?? c.req.header('x-signature');
     let verdict: 'valid' | 'invalid' | 'missing' = 'missing';
     try {
@@ -61,7 +75,14 @@ export function createIngestApp(deps: IngestDeps): { app: Hono; stats: IngestSta
     }
     let body: ExtensivWebhookBody;
     try {
-      body = JSON.parse(raw.toString('utf8')) as ExtensivWebhookBody;
+      const parsed: unknown = JSON.parse(raw.toString('utf8'));
+      if (!isWebhookBody(parsed)) {
+        stats.malformed += 1;
+        // 400 and not 500: a malformed body is never going to succeed, so the sender should
+        // stop retrying it for six hours.
+        return c.json({ error: 'body must be a JSON object' }, 400);
+      }
+      body = parsed;
     } catch {
       stats.malformed += 1;
       return c.json({ error: 'body is not JSON' }, 400);

@@ -45,6 +45,11 @@ function idFromHref(href: string | undefined): string | undefined {
   return m?.[1];
 }
 
+/** A JSON body that is not an object (a bare string, number, null or array) is malformed. */
+export function isWebhookBody(v: unknown): v is ExtensivWebhookBody {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
 export function parseWebhook(raw: Buffer, body: ExtensivWebhookBody, receivedAt: string, verified: boolean): WmsEvent {
   const links = parseMaybeJson(body.links) ?? {};
   const data = parseMaybeJson(body.data) ?? {};
