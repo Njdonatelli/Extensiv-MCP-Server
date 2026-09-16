@@ -65,7 +65,7 @@ Credential roles confirmed on the credential in Support Portal > Manage Credenti
 | Mock attack scenarios pass (duplicate reference replay, out-of-scope customer, out-of-scope facility, over-cap lines, over-cap units, expired change id, stale `If-Match` → 412, missing `If-Match` → 428, 403 role denial, 5xx mid-commit then replay) | [ ] pass | `____-__-__` | `__________` |
 | Read-only run against production (`EXTENSIV_MCP_WRITES_ENABLED=false`) for `____` days with no incorrect data reported | [ ] done, from `____-__-__` to `____-__-__` | | `__________` |
 | Sandbox write run (only if Extensiv provisioned API credentials for a sandbox tenant; see open question in `docs/credential_runbook.md` Step F) | [ ] done / [ ] not available | `____-__-__` | `__________` |
-| Eval suite (`pnpm evals`) tool-selection accuracy: overall `____%`, category `write-prepare` `____%`, `commit` `____%`, `policy` `____%` (minimum acceptable: `____%`) | [ ] meets minimum | `____-__-__` | `__________` |
+| Eval suite tool-selection accuracy against the mock (see `evals/README.md`, Recorded runs): first-call `76%`, task-reach `92%`, `write-prepare` reach `4/5`, `commit` `2/2`, `policy` `1/2`. Re-run against the real API before signing: overall `____%` (minimum acceptable: `____%`) | [ ] meets minimum | `____-__-__` | `__________` |
 | `verify_connection` and `describe_scope` output attached, showing environment label, scope and writes flag | [ ] attached | `____-__-__` | `__________` |
 | Rollback playbook (section 5) rehearsed once on the mock or sandbox | [ ] done | `____-__-__` | `__________` |
 

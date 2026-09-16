@@ -4,7 +4,7 @@ An installable MCP server that exposes [Extensiv 3PL Warehouse Manager](https://
 
 It is built on a reusable, WMS-agnostic core, so a second warehouse system means one new adapter package rather than a rewrite.
 
-> **Status:** verified end to end against a local mock of the Extensiv REST API written from the public documentation. It has **not** been run against real Extensiv credentials. See [`docs/verification_status.md`](docs/verification_status.md) for exactly what is proven and what waits on credentials, and [`packages/mock-extensiv/MOCK_FIDELITY.md`](packages/mock-extensiv/MOCK_FIDELITY.md) for every mocked behaviour with its doc source.
+> **Status:** verified end to end against a local mock of the Extensiv REST API written from the public documentation. It has **not** been run against real Extensiv credentials. See [`docs/verification_status.md`](docs/verification_status.md) for exactly what is proven and what waits on credentials, and [`packages/mock-extensiv/MOCK_FIDELITY.md`](packages/mock-extensiv/MOCK_FIDELITY.md) for every mocked behaviour with its doc source. 313 tests pass across the workspace; 32 mocked behaviours are flagged as outright guesses and 12 as inferred.
 
 ## Packages
 

@@ -117,6 +117,29 @@ results: evals/results/2026-09-16T10-00-00-000Z.json
 
 The results file keeps every selection and its arguments, so a miss can be reviewed without re-running the model. `docs/production_write_signoff.md` asks for the overall number and the `write-prepare`, `commit` and `policy` numbers.
 
+
+## Recorded runs
+
+Four runs against the running server, model `claude-sonnet-5`, driven through the real MCP client. The selections and per-prompt trajectories are in `evals/results/`.
+
+| Run | Selections file | First tool called | Expected tool reached | What changed before the run |
+|---|---|---|---|---|
+| 1 | `selections.json` | 11/25 (44%) | 23/25 (92%) | Baseline |
+| 2 | `selections-v2.json` | 18/25 (72%) | 23/25 (92%) | `customer_id` and `facility_id` accept a name, not just an id |
+| 3 | `selections-v3.json` | 19/25 (76%) | 23/25 (92%) | `order_id` on update and cancel accepts a reference number |
+| 4 | `selections-v4.json` | 19/25 (76%) | 23/25 (92%) | After the adversarial-review fixes; confirms no regression |
+
+Run 1 is the reason the two metrics exist. Task reach was already 92%, but the model spent its first call on `describe_scope` in twelve prompts, because every prompt names a customer the way an operator speaks while every tool demanded an id. That is a defect in the tool surface, not in the model, and it is invisible if you only measure whether the right tool was eventually used. Accepting names closed most of the gap; accepting order reference numbers closed more.
+
+The remaining six imperfect prompts are worth reading rather than optimising away:
+
+- **E02** calls `verify_connection` before `describe_scope`. The prompt asks both "what can you see" and "may you change anything", so checking the connection first is defensible.
+- **E13, E14, E15** look the order or the SKUs up before preparing a write. That is prudence before a mutation, and the trajectory still reaches the right tool.
+- **E22** (writes disabled, asked to create an ASN) calls no tool at all and explains that writes are off. Arguably the better answer; the expectation of `find_receipts` is the debatable part, and it is left as written rather than relaxed to flatter the score.
+- **E25** (write for a customer outside the write allow-list) calls `describe_scope` and then explains. The eval expects `create_order` so that the server's own refusal reaches the operator. A model that pre-empts the policy is not wrong, but it hides the server's message.
+
+Neither miss was "fixed" by editing the expectation. Two expectations that are genuinely arguable are recorded here instead.
+
 ## Adding prompts
 
 Keep the id sequence, keep the fixture names, and cover a real phrasing (paste what someone actually typed, minus PII). Every write prompt needs `requires_writes_enabled: true`. When a new tool is added to the server, add at least one prompt for it and one prompt that is its closest confusable neighbour.
