@@ -6,12 +6,18 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "extensiv-mcp": "./dist/cli.js" },
-  "files": ["dist", "README.md"],
+  "bin": {
+    "extensiv-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc -b",
     "start": "node dist/cli.js",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run --dir src"
   },
   "dependencies": {
     "@mcp-3pl/adapter-extensiv": "workspace:*",
@@ -21,6 +27,8 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@mcp-3pl/mock-extensiv": "workspace:*",
+    "@mcp-3pl/webhook-ingest": "workspace:*",
     "@types/express": "^5.0.0",
     "@types/node": "^22.15.0",
     "typescript": "^5.9.0",

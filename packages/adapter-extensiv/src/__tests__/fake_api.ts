@@ -76,7 +76,9 @@ export function itemsRoute(): Route {
     const exact = /(?:^|;|\()sku==([^;,)]+)/i.exec(rql);
     if (exact?.[1]) {
       const wanted = decodeURIComponent(exact[1]).toUpperCase();
-      rows = rows.filter((r) => (r.sku ?? '').toUpperCase() === wanted);
+      // `sku==*x*` is the documented wildcard form, so it filters as a substring match.
+      const bare = wanted.replace(/^\*|\*$/g, '');
+      rows = wanted.includes('*') ? rows.filter((r) => (r.sku ?? '').toUpperCase().includes(bare)) : rows.filter((r) => (r.sku ?? '').toUpperCase() === wanted);
     }
     if (/readonly\.deactivated==false/i.test(rql)) rows = rows.filter((r) => r.readOnly?.deactivated !== true);
     return { status: 200, body: { totalResults: rows.length, _embedded: { [key]: rows } } };

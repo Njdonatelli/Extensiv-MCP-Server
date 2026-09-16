@@ -111,6 +111,12 @@ importers:
         specifier: ^4.0.0
         version: 4.6.5
     devDependencies:
+      '@mcp-3pl/mock-extensiv':
+        specifier: workspace:*
+        version: link:../mock-extensiv
+      '@mcp-3pl/webhook-ingest':
+        specifier: workspace:*
+        version: link:../webhook-ingest
       '@types/express':
         specifier: ^5.0.0
         version: 5.0.6

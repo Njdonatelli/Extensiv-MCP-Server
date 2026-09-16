@@ -162,6 +162,15 @@ export class MutationEngine {
     }
     rec.commitAttempts += 1;
 
+    // Checked before every other state check, including the committed-replay shortcut: an
+    // outcome recorded against another environment names resources that do not exist here,
+    // so reporting it as a successful replay would be a lie about this environment.
+    if (!sameTarget(rec.target, this.target())) {
+      throw new WmsError('CHANGE_NOT_COMMITTABLE', `Change ${changeId} was prepared against ${rec.target.environmentLabel} (${rec.target.baseUrl}) but this server targets ${this.adapter.info.environmentLabel} (${this.adapter.info.baseUrl}).`, {
+        hint: 'Changes never cross environments. Prepare again against this environment.',
+      });
+    }
+
     if (rec.status === 'committed' && rec.outcome) {
       await this.store.put(rec);
       await this.audit.record({ at: now.toISOString(), kind: 'commit', tool: 'commit_change', changeId, outcome: 'replayed' });
@@ -190,12 +199,6 @@ export class MutationEngine {
         hint: 'Prepare a new change; the preview will reflect the current upstream state.',
       });
     }
-    if (!sameTarget(rec.target, this.target())) {
-      throw new WmsError('CHANGE_NOT_COMMITTABLE', `Change ${changeId} was prepared against ${rec.target.environmentLabel} (${rec.target.baseUrl}) but this server targets ${this.adapter.info.environmentLabel} (${this.adapter.info.baseUrl}).`, {
-        hint: 'Changes never cross environments. Prepare again against this environment.',
-      });
-    }
-
     // Policy is re-evaluated at commit so a narrowed scope or disabled writes take effect immediately.
     try {
       this.policy.assertWrite(rec.plan.scope, rec.plan.summary);

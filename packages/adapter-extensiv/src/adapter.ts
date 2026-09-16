@@ -1300,7 +1300,12 @@ export class ExtensivAdapter implements WmsAdapter {
   }
 }
 
-export function createExtensivAdapter(cfg: ExtensivConfig, deps: ExtensivAdapterDeps = {}): ExtensivAdapter {
+/**
+ * Declared as `WmsAdapter` rather than `ExtensivAdapter` so callers (the server
+ * package, the evals) stay adapter-agnostic and can substitute any other adapter
+ * for the same variable. The class itself is exported for anyone who needs it.
+ */
+export function createExtensivAdapter(cfg: ExtensivConfig, deps: ExtensivAdapterDeps = {}): WmsAdapter {
   return new ExtensivAdapter(cfg, deps);
 }
 
