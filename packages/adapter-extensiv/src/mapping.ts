@@ -418,16 +418,36 @@ export function receiveItemsOf(w: WireReceiver): WireReceiveItem[] {
 }
 
 /**
+ * Whether the receiver itself states that the goods arrived. SOURCE
+ * https://3w.extensiv.com/rels/inventory/receiver: status 1 Closed is "has been
+ * confirmed"; SOURCE https://3w.extensiv.com/rels/inventory/receiverconfirm: the
+ * confirmer stamps `arrivalDate` and rejects a future one. A cancelled receiver
+ * never received anything, whatever it still carries.
+ */
+export function receiptArrived(w: WireReceiver): boolean {
+  const status = toReceiptStatus(w.readOnly?.status);
+  if (status === 'cancelled') return false;
+  return status === 'closed' || str(w.arrivalDate) !== undefined;
+}
+
+/**
  * SOURCE https://3w.extensiv.com/rels/inventory/receiveitems: a receive item has
  * `readOnly.expectedQty` and `qty`.
  * INFERRED: on a plain receiver expectedQty is null and `qty` is both the expected
  * and the entered quantity; on a Receive-Against ASN expectedQty is the ASN line and
- * `qty` what the warehouse keyed in. Variance is therefore received - expected,
- * and is 0 for a receiver that was never an ASN.
+ * `qty` what the warehouse keyed in.
+ * GUESS: `qty` on a receiver that has not arrived (see receiptArrived) is a plan, not
+ * an arrival. No rel page says a receive item holds stock before the confirmer runs,
+ * and an unconfirmed ASN comes back with qty == expectedQty and inventoryLevels 0/0 —
+ * mapping that to qtyReceived told the model a shipment due tomorrow had fully landed.
+ * We therefore report 0 received until the record says otherwise, so variance on such
+ * a line is the whole outstanding quantity. RE-VERIFY on a real tenant: if 3PLWM lets
+ * a warehouse key partial quantities into an open receiver, this under-reports them.
  */
-export function toReceiptLine(item: WireReceiveItem): ReceiptLine {
-  const received = num(item.qty) ?? 0;
-  const expected = num(item.readOnly?.expectedQty) ?? received;
+export function toReceiptLine(item: WireReceiveItem, arrived: boolean): ReceiptLine {
+  const keyed = num(item.qty) ?? 0;
+  const expected = num(item.readOnly?.expectedQty) ?? keyed;
+  const received = arrived ? keyed : 0;
   return {
     lineId: item.readOnly?.receiveItemId !== undefined ? String(item.readOnly.receiveItemId) : undefined,
     sku: nameOf(item.itemIdentifier) ?? '',
@@ -442,8 +462,9 @@ export function toReceiptLine(item: WireReceiveItem): ReceiptLine {
 
 export function toReceiptSummary(w: WireReceiver, names?: RefMaps): ReceiptSummary {
   const ro = w.readOnly;
-  const lines = receiveItemsOf(w).map(toReceiptLine);
   const status = toReceiptStatus(ro?.status);
+  const arrived = receiptArrived(w);
+  const lines = receiveItemsOf(w).map((i) => toReceiptLine(i, arrived));
   return {
     id: ro?.receiverId !== undefined ? String(ro.receiverId) : '',
     referenceNum: str(w.referenceNum) ?? '',
@@ -468,6 +489,7 @@ export function toReceiptSummary(w: WireReceiver, names?: RefMaps): ReceiptSumma
 export function toReceiptDetail(w: WireReceiver, opts: { version?: string; names?: RefMaps } = {}): ReceiptDetail {
   const ro = w.readOnly;
   const summary = toReceiptSummary(w, opts.names);
+  const hasArrived = receiptArrived(w);
   const events: TimelineEvent[] = [];
   const created = str(ro?.creationDate);
   if (created) events.push({ at: created, event: 'receipt created' });
@@ -479,7 +501,7 @@ export function toReceiptDetail(w: WireReceiver, opts: { version?: string; names
   if (modified) events.push({ at: modified, event: summary.status === 'closed' ? 'confirmed (stock on hand)' : 'last modified' });
   return {
     ...summary,
-    lines: receiveItemsOf(w).map(toReceiptLine),
+    lines: receiveItemsOf(w).map((i) => toReceiptLine(i, hasArrived)),
     notes: str(w.notes),
     version: opts.version,
     timeline: sortTimeline(events),

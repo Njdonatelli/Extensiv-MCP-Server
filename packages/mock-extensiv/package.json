@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Local mock of the Extensiv 3PL Warehouse Manager REST API (HAL, RQL, ETag, webhooks, fault injection) for building and attacking the MCP server before sandbox credentials exist",
   "license": "MIT",
+  "engines": { "node": ">=20" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,7 +11,7 @@
   "bin": { "extensiv-mock": "./dist/cli.js" },
   "files": ["dist", "README.md", "MOCK_FIDELITY.md"],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && chmod +x dist/cli.js",
     "start": "node dist/cli.js",
     "dev": "tsx src/cli.ts",
     "test": "vitest run --dir src"

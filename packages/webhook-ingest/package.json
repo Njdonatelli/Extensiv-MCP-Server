@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "description": "Standalone webhook receiver for Extensiv 3PL Warehouse Manager: verifies signatures, dedupes, and appends events to the store the MCP server reads",
   "license": "MIT",
+  "engines": { "node": ">=20" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "bin": { "extensiv-webhook-ingest": "./dist/cli.js" },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && chmod +x dist/cli.js",
     "start": "node dist/cli.js",
     "dev": "tsx src/cli.ts"
   },

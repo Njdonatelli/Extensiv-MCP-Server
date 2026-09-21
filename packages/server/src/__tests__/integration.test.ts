@@ -321,6 +321,30 @@ describe('writes-enabled mode: every one of the 16 tools against the real mock',
     expect(byId.receipt.referenceNum).toBe('ACME-ASN-5001');
   });
 
+  it('does not report an ASN that has not arrived as short', async () => {
+    const open = await use<{
+      receipt: { referenceNum: string; status: string; totalExpectedQty: number; totalReceivedQty: number; lines: { qtyExpected: number; qtyReceived: number; variance: number }[] };
+      arrived: boolean;
+      varianceLines: number;
+      variances: unknown[];
+      outstandingNote?: string;
+    }>(stack, 'get_receipt_status', { reference_num: 'ACME-ASN-5004' });
+
+    expect(open.receipt.status).toBe('open');
+    expect(open.arrived).toBe(false);
+    // Nothing has landed, so nothing is received and nothing is short — the whole
+    // quantity is outstanding instead. Answering "what was short?" with the entire
+    // ASN is the failure this guards.
+    expect(open.receipt.totalReceivedQty).toBe(0);
+    expect(open.varianceLines).toBe(0);
+    expect(open.variances).toEqual([]);
+    expect(open.outstandingNote).toMatch(/nothing has been received/i);
+    for (const line of open.receipt.lines) {
+      expect(line.qtyReceived).toBe(0);
+      expect(line.variance).toBe(-line.qtyExpected);
+    }
+  });
+
   it("operations_summary returns today's counts and its caveats", async () => {
     const ops = await use<{
       day: string;

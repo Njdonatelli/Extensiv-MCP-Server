@@ -12,12 +12,52 @@ interface TokenResponse {
   scope?: string | null;
 }
 
+/**
+ * Rejection body of the token endpoint. Two shapes exist in the wild, so both are read:
+ * the ASP.NET `Message` string production returns, and the RFC 6749 §5.2
+ * `error`/`error_description` pair the sandbox emits.
+ */
+interface TokenErrorResponse {
+  Message?: unknown;
+  error?: unknown;
+  error_description?: unknown;
+}
+
 export type ExtensivAuthConfig = Pick<ExtensivConfig, 'authUrl' | 'clientId' | 'clientSecret' | 'userLogin' | 'tplGuid' | 'tokenRefreshMarginSeconds' | 'httpTimeoutMs'>;
 
 export interface ExtensivTokenProviderDeps {
   fetchImpl?: typeof fetch;
   clock?: Clock;
   logger?: Logger;
+}
+
+/** A rejection reason is upstream text on a model-visible message, so it stays short enough to read at a glance. */
+const REASON_MAX_CHARS = 160;
+
+/** Prefers the ASP.NET field production uses, then the OAuth2 pair; a non-JSON body arrives here as its raw text. */
+function extractReason(parsed: unknown): string {
+  if (typeof parsed === 'string') return parsed;
+  if (typeof parsed !== 'object' || parsed === null) return '';
+  const body = parsed as TokenErrorResponse;
+  if (typeof body.Message === 'string' && body.Message !== '') return body.Message;
+  const error = typeof body.error === 'string' ? body.error : '';
+  const description = typeof body.error_description === 'string' ? body.error_description : '';
+  if (error && description) return `${error}: ${description}`;
+  return error || description;
+}
+
+/**
+ * The reason is attacker-influenceable text from a body we did not write: a secret it echoes
+ * must not reach a message or a log line, and control characters must not break the one-line
+ * JSON log format.
+ */
+function sanitizeReason(raw: string, forbidden: readonly string[]): string {
+  let out = raw;
+  for (const needle of forbidden) {
+    if (needle.length > 0 && out.includes(needle)) out = out.split(needle).join('<redacted>');
+  }
+  out = out.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return out.length > REASON_MAX_CHARS ? `${out.slice(0, REASON_MAX_CHARS)}…` : out;
 }
 
 const AUTH_HINT =
@@ -33,6 +73,7 @@ const AUTH_HINT =
  *   Accept: application/json
  *   { "grant_type": "client_credentials", "user_login": "...", "tpl": "<guid>"? }
  *   -> 200 { access_token, token_type: "Bearer", expires_in: 3600, ... }
+ *   -> 401 { "Message": "invalid_client: ..." } in production; see login() for the citation.
  *
  * Behaviour: the token is cached until `expires_in - margin`; concurrent
  * callers share one in-flight login (single-flight) so a burst of requests
@@ -124,12 +165,16 @@ export class ExtensivTokenProvider implements TokenProvider {
     }
 
     if (res.status === 400 || res.status === 401) {
-      // The auth server answers 400 (invalid_client / invalid_grant) or 401 for bad credentials.
-      // Only the error code is surfaced; the body could echo the user_login but never the secret,
-      // and we still avoid forwarding it verbatim.
-      const code = typeof parsed === 'object' && parsed !== null ? String((parsed as { error?: unknown }).error ?? '') : '';
-      this.log.warn('extensiv login rejected', { status: res.status, error: code });
-      throw new WmsError('AUTH_FAILED', `Extensiv rejected the API credentials (HTTP ${res.status}${code ? `, ${code}` : ''}).`, {
+      // Production rejects with an ASP.NET body, not the OAuth2 one: a live probe of
+      // POST https://secure-wms.com/AuthServer/api/Token on 2026-09-21 answered HTTP 401
+      // {"Message":"invalid_client: client not registered"} (SOURCE: that probe — the failure
+      // body is described on no doc page). The sandbox still emits 400/401 with
+      // {"error","error_description"}, so whichever field is present is surfaced: telling
+      // "client not registered" from a disabled credential or a bad user_login is the one
+      // actionable detail here. Sanitised first — the body is upstream text.
+      const reason = sanitizeReason(extractReason(parsed), [this.cfg.clientSecret, basic]);
+      this.log.warn('extensiv login rejected', { status: res.status, reason });
+      throw new WmsError('AUTH_FAILED', `Extensiv rejected the API credentials (HTTP ${res.status}${reason ? `, ${reason}` : ''}).`, {
         hint: AUTH_HINT,
         details: { status: res.status, clientIdMasked: maskClientId(this.cfg.clientId), userLogin: this.cfg.userLogin },
       });

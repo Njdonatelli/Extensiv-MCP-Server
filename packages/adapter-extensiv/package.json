@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "WmsAdapter implementation for the Extensiv 3PL Warehouse Manager REST API (OAuth2 client_credentials, HAL+RQL, ETag/If-Match)",
   "license": "MIT",
+  "engines": { "node": ">=20" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Reusable MCP core for 3PL warehouse systems: task-shaped tools, read-only-by-default policy, two-phase mutations with idempotency, event store, adapter contract",
   "license": "MIT",
+  "engines": { "node": ">=20" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

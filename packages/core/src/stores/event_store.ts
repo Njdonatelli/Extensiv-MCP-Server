@@ -137,13 +137,15 @@ export class JsonlEventStore extends MemoryEventStore {
   }
 
   override async append(event: WmsEvent): Promise<{ inserted: boolean }> {
-    await this.refresh();
-    if (this.ids.has(event.id)) return { inserted: false };
     const line = JSON.stringify(event) + '\n';
-    // Durability before memory: if the id were recorded first and the append then
-    // failed, the delivery would be lost from disk while the sender's retry came
-    // back as a duplicate and was acknowledged. Claim the id only once it is on disk.
+    let inserted = false;
+    // The dedupe check belongs inside the serialised section, not before it: a webhook
+    // sender that retries while its first delivery is still in flight gives us concurrent
+    // first-time appends of one id, and outside the queue they all see an unclaimed id,
+    // each writing its own line and each answering `duplicate: false` to the sender.
     const write = this.queue.then(async () => {
+      await this.refresh();
+      if (this.ids.has(event.id)) return;
       await fs.mkdir(path.dirname(this.file), { recursive: true });
       // A crash can leave a half-written final line. Appending straight onto it would glue
       // the new record to the fragment, making BOTH unparseable, and the delivery would be
@@ -153,15 +155,20 @@ export class JsonlEventStore extends MemoryEventStore {
       // Deliberately NOT advancing bytesRead: another writer may have appended between
       // our read and our write, so the offset our line landed at is unknown. refresh()
       // rediscovers it and dedupes on id.
+      //
+      // Durability before memory: if the id were recorded first and the append then
+      // failed, the delivery would be lost from disk while the sender's retry came
+      // back as a duplicate and was acknowledged. Claim the id only once it is on disk.
+      this.ids.add(event.id);
+      this.events.push(structuredClone(event));
+      this.trim();
+      inserted = true;
     });
     // One failed write must not leave a rejected promise as the queue tail, or every
     // later append would fail with the first error and never run.
     this.queue = write.catch(() => undefined);
     await write;
-    this.ids.add(event.id);
-    this.events.push(structuredClone(event));
-    this.trim();
-    return { inserted: true };
+    return { inserted };
   }
 
   override async query(q: EventQuery = {}): Promise<WmsEvent[]> {

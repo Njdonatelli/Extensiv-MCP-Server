@@ -54,7 +54,10 @@ export const describeScope = defineTool({
         id: c.id,
         name: c.name,
         active: c.active,
-        facilities: c.facilities,
+        // A facility hidden from the list below may not be named here either: the same
+        // response would both count it in hiddenByPolicy and print its id and name, and
+        // every other tool refuses a facility_id outside the read scope.
+        facilities: ctx.policy.filterFacilities(c.facilities),
         writable: ctx.policy.canWrite(c.id),
       })),
       facilities: readableFacilities.map((f) => ({ id: f.id, name: f.name, active: f.active, timeZone: f.timeZone })),
@@ -223,7 +226,7 @@ export const checkInventory = defineTool({
   handler: async (input, ctx) => {
     const customerId = await resolveCustomerRef(ctx, input.customer_id, true);
     const facilityId = await resolveFacilityRef(ctx, input.facility_id);
-    const positions = await ctx.adapter.getInventory({
+    const fetched = await ctx.adapter.getInventory({
       customerId,
       facilityId,
       skus: input.skus,
@@ -232,14 +235,18 @@ export const checkInventory = defineTool({
       includeZero: input.include_zero || input.low_stock_only,
       limit: input.limit,
     });
+    // A caller who names an out-of-scope facility is refused; leaving that facility's rows
+    // in an unnamed listing would hand over its id, name and stock anyway.
+    const positions = fetched.filter((p) => ctx.policy.canReadFacility(p.facility.id));
     if (!input.low_stock_only) {
       return {
         customerId,
         facilityId,
         count: positions.length,
-        // A silently truncated stock list reads as "that is all there is".
-        truncated: positions.length >= input.limit,
-        ...(positions.length >= input.limit ? { truncationNote: `Stopped at the limit of ${input.limit} positions; narrow with skus or sku_contains, or raise limit.` } : {}),
+        // A silently truncated stock list reads as "that is all there is". Truncation is
+        // judged on what upstream returned, not on what survived the policy filter.
+        truncated: fetched.length >= input.limit,
+        ...(fetched.length >= input.limit ? { truncationNote: `Stopped at the limit of ${input.limit} positions; narrow with skus or sku_contains, or raise limit.` } : {}),
         positions,
       };
     }
@@ -343,7 +350,7 @@ export const getReceiptStatus = defineTool({
   name: 'get_receipt_status',
   title: 'Get receipt status',
   description:
-    'One inbound receipt / ASN in depth: status, expected and arrival dates, carrier/tracking, and every line with expected vs received quantity, variance, lot, expiration and put-away location, plus a timeline. Look up by receipt id or reference number (plus customer_id if needed). Use it for "did PO 4471 arrive", "what was short on the last delivery".',
+    'One inbound receipt / ASN in depth: status, expected and arrival dates, carrier/tracking, and every line with expected vs received quantity, variance, lot, expiration and put-away location, plus a timeline. Look up by receipt id or reference number (plus customer_id if needed). Use it for "did PO 4471 arrive", "what was short on the last delivery". Received quantities count only once the receipt is confirmed or carries an arrival date: until then `arrived` is false, received is 0, `varianceLines` is 0, and each line\'s variance is the quantity still outstanding rather than a shortage.',
   kind: 'read',
   inputSchema: z
     .object({
@@ -358,8 +365,17 @@ export const getReceiptStatus = defineTool({
     const receipt = await ctx.adapter.getReceipt({ id: input.receipt_id, referenceNum: input.reference_num, customerId });
     if (!receipt) throw new WmsError('NOT_FOUND', `No receipt found for ${input.receipt_id ? `id ${input.receipt_id}` : `reference ${input.reference_num}`}.`, { hint: 'Try find_receipts with po_num or a date range.' });
     ctx.policy.assertReadCustomer(receipt.customer.id);
-    const variances = receipt.lines.filter((l) => l.variance !== 0);
-    return { receipt, varianceLines: variances.length, variances };
+    // Before the goods land every line reads as short by its whole quantity. That is
+    // arithmetically right, but it answers "what was short on this delivery?" with the
+    // entire ASN, so a variance is only a variance once the record says stock arrived.
+    const arrived = receipt.status === 'closed' || receipt.arrivalDate !== undefined;
+    const variances = arrived ? receipt.lines.filter((l) => l.variance !== 0) : [];
+    const outstanding = arrived
+      ? undefined
+      : receipt.status === 'cancelled'
+        ? 'This receipt was cancelled, so nothing was received against it. Per-line variance shows the quantity that never arrived.'
+        : 'Nothing has been received against this receipt yet, so no line can be short. Per-line variance shows the full quantity still outstanding.';
+    return { receipt, arrived, varianceLines: variances.length, variances, ...(outstanding ? { outstandingNote: outstanding } : {}) };
   },
 });
 
@@ -442,7 +458,7 @@ export const recentEvents = defineTool({
   name: 'recent_events',
   title: 'Recent events',
   description:
-    'Recent events pushed by the warehouse system via webhooks and captured by the webhook-ingest process: order created/updated/shipped (OrderConfirm)/cancelled/fully allocated/packed, receipt created/confirmed/cancelled, inventory holds, item changes. Filter by event type, customer, reference number, or since a timestamp. Answers "what shipped in the last hour", "did anything happen with ACME-SO-10007". If the ingest process is not running the list is empty; verify_connection reports the events file.',
+    'Recent events pushed by the warehouse system via webhooks and captured by the webhook-ingest process: order created/updated/shipped (OrderConfirm)/cancelled/fully allocated/packed, receipt created/confirmed/cancelled, inventory holds, item changes. Filter by event type, customer, reference number, or since a timestamp. Answers "what shipped in the last hour", "did anything happen with ACME-SO-10007". Events belonging to a customer outside this server\'s read scope are omitted silently; `withheldUnattributedInWindow` counts only events carrying no customer link at all, and counts them over the whole `since` window rather than over the filters used in the call. If the ingest process is not running the list is empty; verify_connection reports the events file.',
   kind: 'read',
   inputSchema: z.object({
     since: common.isoDate.optional().describe('Only events at or after this time.'),
@@ -456,14 +472,24 @@ export const recentEvents = defineTool({
     const customerId = await resolveCustomerRef(ctx, input.customer_id, false);
     const events = await ctx.events.query({ since: input.since, eventTypes: input.event_types, customerId, referenceNum: input.reference_num, limit: input.limit });
     // An event whose payload carried no customer link cannot be shown to be in scope, so
-    // when an allow-list is configured it is withheld and only counted. Without an
-    // allow-list every customer is readable and there is nothing to withhold.
+    // when an allow-list is configured it is withheld. Without an allow-list every
+    // customer is readable and there is nothing to withhold. An event attributed to a
+    // customer outside the scope is dropped without a trace: counted, it would make this
+    // response an existence oracle, answering 1 for a probe of an out-of-scope
+    // reference_num where an unused reference answers 0 -- the very thing
+    // recent_events{customer_id} refuses with SCOPE_DENIED.
     const scoped = ctx.policy.readCustomerFilter() !== undefined;
     const visible = events.filter((e) => (e.customerId ? ctx.policy.canReadCustomer(e.customerId) : !scoped));
-    const withheld = events.length - visible.length;
+    // The unattributed count is still worth reporting -- it tells the operator that events
+    // are arriving that cannot be scoped at all -- but it is taken over the window alone:
+    // computed after the caller's filters it would vary with the probe in the same way.
+    const withheld = scoped ? (await ctx.events.query({ since: input.since, limit: input.limit })).filter((e) => !e.customerId).length : 0;
     return {
       count: visible.length,
-      withheldUnattributed: withheld,
+      withheldUnattributedInWindow: withheld,
+      ...(withheld > 0
+        ? { withheldNote: `${withheld} event(s) since ${input.since ?? 'the start of the retained window'} carry no customer link and cannot be shown to be in this server's read scope. That count covers the whole window, not the filters used in this call.` }
+        : {}),
       unverifiedSignatures: visible.filter((e) => !e.verified).length,
       eventsFile: ctx.config.eventsFile ?? `${ctx.config.stateDir}/events.jsonl`,
       events: visible.map(({ raw: _raw, ...e }) => e),

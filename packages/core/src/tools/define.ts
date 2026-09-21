@@ -44,6 +44,18 @@ export interface ToolCallResult {
 }
 
 /**
+ * AuditEntry.input promises a size-capped summary, and the audit log is what an operator
+ * reconstructs an incident from: recording arguments verbatim let one call append however
+ * many bytes a client chose to send (a 200k-character reference_num_contains grew
+ * audit.jsonl by 200kB), so a buggy or hostile client could bury the record it matters in.
+ * Same 1000-char cap as MutationEngine.summarizeInput, which is private to that module.
+ */
+function summarizeInput(input: unknown): unknown {
+  const s = JSON.stringify(input);
+  return s.length > 1000 ? s.slice(0, 1000) + '…' : input;
+}
+
+/**
  * Executes a tool with audit + uniform error shaping. Errors become
  * `{ error: { code, message, hint } }` with isError so the model can reason
  * about them instead of receiving a protocol-level failure.
@@ -65,14 +77,14 @@ export async function runTool(def: ToolDefinition, rawInput: unknown, ctx: ToolC
       tool: def.name,
       outcome: 'ok',
       durationMs: Date.now() - started,
-      input: def.kind === 'read' ? undefined : parsed.data,
+      input: def.kind === 'read' ? undefined : summarizeInput(parsed.data),
     });
     return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }], structuredContent: result };
   } catch (e) {
     const err = toWmsError(e);
     const outcome = err.code === 'SCOPE_DENIED' || err.code === 'WRITES_DISABLED' ? 'refused' : 'error';
     ctx.logger[outcome === 'refused' ? 'warn' : 'error'](`tool ${def.name} ${outcome}`, { code: err.code, message: err.message });
-    await ctx.audit.record({ at: new Date(started).toISOString(), kind: 'tool_call', tool: def.name, outcome, durationMs: Date.now() - started, error: { code: err.code, message: err.message }, input: parsed.data });
+    await ctx.audit.record({ at: new Date(started).toISOString(), kind: 'tool_call', tool: def.name, outcome, durationMs: Date.now() - started, error: { code: err.code, message: err.message }, input: summarizeInput(parsed.data) });
     const payload = { error: err.toJSON() };
     return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }], structuredContent: payload, isError: true };
   }
@@ -192,6 +204,17 @@ export async function resolveOrderRef(ctx: ToolContext, value: string, customerI
   });
 }
 
+/**
+ * Date-only, or date-time with optional seconds, optional fractional seconds and an
+ * optional Z/offset -- every shape the adapter actually puts on the wire, in an rql
+ * predicate or in an order body. Expressed as a regex, not a refine: `.regex()` becomes
+ * `pattern` in the JSON Schema the model is given, while `.refine()` is dropped, so a
+ * refine would leave the model guessing at the very format it keeps getting wrong.
+ * Unvalidated, a literal "today" -- what a model writes when the operator says "ship it
+ * today" -- was stored verbatim as an order's earliestShipDate.
+ */
+const ISO_8601 = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,7})?)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)?)?$/;
+
 /** Shared zod fragments so every tool describes the same things the same way. */
 export const common = {
   customerId: z
@@ -202,7 +225,13 @@ export const common = {
     .string()
     .min(1)
     .describe('Facility (warehouse) id OR name, e.g. "1" or "LAX-1". A partial name is accepted when it matches exactly one facility.'),
-  isoDate: z.string().min(4).describe('ISO-8601 date or date-time, e.g. 2026-09-16 or 2026-09-16T00:00:00Z.'),
+  isoDate: z
+    .string()
+    .regex(
+      ISO_8601,
+      'must be an ISO-8601 date like 2026-09-16, or a date-time like 2026-09-16T00:00:00Z. Relative words ("today", "tomorrow", "now") are not accepted: work out the calendar date yourself and pass it in that form.',
+    )
+    .describe('ISO-8601 date or date-time, e.g. 2026-09-16 or 2026-09-16T00:00:00Z. Resolve relative words such as "today" to the calendar date before calling.'),
   limit: (def: number, max: number) => z.number().int().min(1).max(max).default(def).describe(`Max results (default ${def}, max ${max}).`),
 };
 

@@ -164,7 +164,7 @@ describe('order mapping', () => {
 });
 
 describe('receipt mapping', () => {
-  it('maps expected vs received with a per-line variance and summed totals', () => {
+  it('reports an un-arrived receiver as fully outstanding and sums the totals', () => {
     const d = toReceiptDetail(fixture<WireReceiver>('receiver_open.json'), { version: 'etag-3001' });
     expect(d).toMatchObject({
       id: '3001',
@@ -174,13 +174,13 @@ describe('receipt mapping', () => {
       expectedDate: '2026-09-18T00:00:00Z',
       lineCount: 2,
       totalExpectedQty: 150,
-      totalReceivedQty: 146,
+      totalReceivedQty: 0,
       carrier: 'Old Dominion',
       trackingNumber: 'OD-55512',
       version: 'etag-3001',
     });
-    expect(d.lines[0]).toMatchObject({ lineId: '8001', sku: 'WIDGET-BLUE', qtyExpected: 100, qtyReceived: 96, variance: -4, lotNumber: 'L-90', location: 'RCV-DOCK' });
-    expect(d.lines[1]!.variance).toBe(0);
+    expect(d.lines[0]).toMatchObject({ lineId: '8001', sku: 'WIDGET-BLUE', qtyExpected: 100, qtyReceived: 0, variance: -100, lotNumber: 'L-90', location: 'RCV-DOCK' });
+    expect(d.lines[1]!.variance).toBe(-50);
     expect(d.closedAt).toBeUndefined();
     expect(d.timeline.map((e) => e.event)).toEqual(['receipt created', 'last modified', 'expected at warehouse']);
   });
@@ -193,7 +193,7 @@ describe('receipt mapping', () => {
   it('maps a receiver list page', () => {
     const rows = embedded<WireReceiver>(fixture('receivers_page.json'), REL.receiver);
     expect(rows.map((r) => toReceiptSummary(r)).map((s) => [s.id, s.status, s.totalExpectedQty, s.totalReceivedQty])).toEqual([
-      ['3001', 'open', 150, 146],
+      ['3001', 'open', 150, 0],
       ['3002', 'closed', 200, 200],
     ]);
   });

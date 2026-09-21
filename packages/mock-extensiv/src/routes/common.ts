@@ -31,6 +31,13 @@ export const PAGING = {
 } as const;
 
 export const TOKEN_PATH = '/AuthServer/api/Token';
+/**
+ * SOURCE: https://help.extensiv.com/en_US/rest-api/implementing-webhooks — the signing key is how a
+ * receiver bootstraps trust, and a standalone receiver holds no API credential, so this endpoint
+ * cannot be bearer-gated. Gating it in the mock broke the shipped webhook-ingest CLI against the
+ * shipped mock: the key fetch 401'd and every genuinely signed delivery was rejected.
+ */
+export const WEBHOOK_KEY_PATH = '/events/webhook/key';
 /** Mock-only control plane; never proxied to or served by the real API. */
 export const CONTROL_PREFIX = '/__mock/';
 
@@ -41,7 +48,7 @@ export const CONTROL_PREFIX = '/__mock/';
 export function bearerMiddleware(state: MockState): MiddlewareHandler<MockEnv> {
   return async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (path === TOKEN_PATH || path.startsWith(CONTROL_PREFIX)) return next();
+    if (path === TOKEN_PATH || path === WEBHOOK_KEY_PATH || path.startsWith(CONTROL_PREFIX)) return next();
     const header = (c.req.header('Authorization') ?? '').trim();
     const match = /^Bearer\s+(\S+)$/i.exec(header);
     if (!match) throw unauthorized();

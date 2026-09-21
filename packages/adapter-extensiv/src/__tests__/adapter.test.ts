@@ -170,7 +170,7 @@ describe('findReceipts / getReceipt', () => {
     const call = api.calls.find((c) => c.path === '/inventory/receivers')!;
     expect(call.query.get('detail')).toBe('ReceiveItems');
     expect(call.query.get('rql')).toBe('readonly.customeridentifier.id==143;ponum==PO-88;readonly.status==0');
-    expect(page.items[0]).toMatchObject({ id: '3001', totalExpectedQty: 150, totalReceivedQty: 146 });
+    expect(page.items[0]).toMatchObject({ id: '3001', totalExpectedQty: 150, totalReceivedQty: 0 });
   });
 
   it('reads a single receipt with detail=All and the ETag as version', async () => {
