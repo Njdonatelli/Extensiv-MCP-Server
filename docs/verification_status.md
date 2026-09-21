@@ -10,7 +10,7 @@ What is actually proven about this server, and what is still waiting on real Ext
 | Test suite | 405 tests in 29 files, all passing (`npx vitest run`) |
 | By package | mock-extensiv 135, adapter-extensiv 105, core 103, server 49 (integration, attacks and transport hardening), webhook-ingest 7, evals 6 |
 | Typecheck and build | `npx tsc -b tsconfig.json` and `pnpm -r --filter './packages/*' run build` both clean |
-| Tool-selection eval | 4 runs through a real MCP client against the running server; 19/25 first-call (76%), 23/25 task-reach (92%), stable across the review fixes |
+| Tool-selection eval | 6 runs through a real MCP client against the running server. Task reach 23/25 (92%) in five of six, and it has never moved on a code change. First-call 18/25 (72%) most recently, with a measured spread of about ±2 prompts at n=1 — see the variance section in [evals/README.md](../evals/README.md) before reading a single run as a regression |
 | Adversarial review | 6 lenses raised 53 findings; 13 survived 3-vote verification and all 13 are addressed or documented |
 | Live exercise | 6 slices drove the built server through a real MCP client over both transports: 150 behavioural checks, 133 held. 14 defects raised, 9 confirmed by 3-vote verification, plus 2 more reproduced and fixed. All 11 reproductions replayed clean after the fix ([section 6](#6-what-the-live-exercise-found)) |
 | Mock fidelity | 161 status-bearing rows: 128 single-label (84 Documented, 11 Inferred, 33 Guess) and 33 deliberately compound, where the docs pin the shape but not the values. Reproduce with `python3 scripts/count_fidelity.py` ([MOCK_FIDELITY.md](../packages/mock-extensiv/MOCK_FIDELITY.md)) |

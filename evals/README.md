@@ -120,7 +120,7 @@ The results file keeps every selection and its arguments, so a miss can be revie
 
 ## Recorded runs
 
-Four runs against the running server, model `claude-sonnet-5`, driven through the real MCP client. The selections and per-prompt trajectories are in `evals/results/`.
+Six runs against the running server, model `claude-sonnet-5`, driven through the real MCP client. The selections and per-prompt trajectories are in `evals/results/`.
 
 | Run | Selections file | First tool called | Expected tool reached | What changed before the run |
 |---|---|---|---|---|
@@ -128,6 +128,24 @@ Four runs against the running server, model `claude-sonnet-5`, driven through th
 | 2 | `selections-v2.json` | 18/25 (72%) | 23/25 (92%) | `customer_id` and `facility_id` accept a name, not just an id |
 | 3 | `selections-v3.json` | 19/25 (76%) | 23/25 (92%) | `order_id` on update and cancel accepts a reference number |
 | 4 | `selections-v4.json` | 19/25 (76%) | 23/25 (92%) | After the adversarial-review fixes; confirms no regression |
+| 5 | `selections-v5.json` | 17/25 (68%) | 22/25 (88%) | After the live-exercise defect fixes |
+| 6 | `selections-v6.json` | 18/25 (72%) | 23/25 (92%) | Second sample of the same build, to separate signal from noise |
+
+### Runs 5 and 6, and how much of this number is noise
+
+First-call moved 19 → 17 → 18 across runs 4, 5 and 6, and it would be easy to read run 5 as a regression caused by the defect fixes. It is not, and the evidence is worth keeping because it also bounds how much any single run of this suite can be trusted.
+
+Only three prompts differed between runs 4 and 5. Each was re-run three more times on the unchanged build:
+
+| Prompt | Run 4 | Run 5 | 3 repeats | Reading |
+|---|---|---|---|---|
+| E21 | hit | miss | hit, hit, hit | Noise. 4 of 5 samples hit |
+| E13 | miss | miss | miss, miss, hit | Noise, and it scored identically in both runs anyway |
+| E12 | hit | miss | miss, miss, miss | Looked like a real regression — until run 6 hit it again |
+
+E12's full history across every recorded run is `describe_scope, describe_scope, create_order, create_order, describe_scope, create_order`: it flips. Neither prompt that moved involves a date, so the new ISO-8601 validation is not implicated, and no prompt shows a consistent post-change degradation.
+
+**Task reach is 23/25 in five of the six runs and has never moved on a code change.** That is the metric to watch. First-call has a spread of roughly ±2 prompts run to run at n=1, so a single run's first-call score should not be used to accept or reject a change to the tool surface; re-run the prompts that moved before concluding anything. The four prompts that flip — E12, E13, E14, E15 — are all write-prepares where the model chooses whether to verify before mutating, which is exactly the judgement call that ought to vary.
 
 Run 1 is the reason the two metrics exist. Task reach was already 92%, but the model spent its first call on `describe_scope` in twelve prompts, because every prompt names a customer the way an operator speaks while every tool demanded an id. That is a defect in the tool surface, not in the model, and it is invisible if you only measure whether the right tool was eventually used. Accepting names closed most of the gap; accepting order reference numbers closed more.
 
