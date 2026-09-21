@@ -1,6 +1,6 @@
 # Extensiv 3PL Warehouse Manager REST API research notes (2026-09-16)
 
-Source: fetched by a research subagent. This file is the citation base for `packages/mock-extensiv`. Every mock behaviour cites one of the URLs below; anything marked INFERRED is a guess to re-verify against sandbox or production.
+Source: fetched by a research subagent. This file is the citation base for `packages/mock-extensiv`. Every mock behaviour cites one of the URLs below; anything marked INFERRED is a guess to re-verify against sandbox or production. Anything marked UNVERIFIED is a guess the code already acts on and that must be re-checked the moment real credentials exist. A single class of fact is marked **VERIFIED LIVE**: it comes from a direct probe of the production API on the stated date, not from a documentation page, so it cites no URL.
 
 ## 0. Where the real documentation lives
 - https://developer.extensiv.com/ is a landing page; the 3PLWM tile links to https://developer.3plcentral.com, a Postman-published JS shell (unreadable without a browser; /docs, /reference, swagger paths all 404).
@@ -8,6 +8,7 @@ Source: fetched by a research subagent. This file is the citation base for `pack
 - Concept pages: https://3w.extensiv.com/Rels/auth, /Rels/headers, /Rels/hal, /Rels/rql, /Rels/exceptions, /Rels/billboard, /Rels/identifiers. Service indexes: /Rels/orders, /Rels/inventory, /Rels/customers, /Rels/properties.
 - Doc contact: api@extensiv.com. Docs are "subject to change without warning".
 - Base API URL: `https://secure-wms.com` (help center). `secure-wms.com/` root redirects to the UI at 3w.extensiv.com/smartui.
+- **VERIFIED LIVE (2026-09-21, direct probe, no doc page):** both API hosts are reachable from the open internet without credentials. `GET https://secure-wms.com/AuthServer/api/Token` answers **405** — the endpoint exists and is POST-only, which matches §1. `https://api.3plcentral.com/rels/auth` answers **302** (a redirect; the target was not recorded).
 
 ## 1. Authentication (https://3w.extensiv.com/Rels/auth ; https://help.extensiv.com/en_US/rest-api/providing-rest-api-access)
 Credential types: "Single-Tenant static" (third-party developers; issued for one 3PL), "Single-Tenant dynamic" (internal; must send `tpl` GUID), "Multi-Tenant" (internal). OAuth2 client_credentials: BASIC auth to get a token, BEARER to call.
@@ -26,6 +27,7 @@ Accept: application/json
   Help center says tokens last "typically between 30 and 60 minutes" and recommends refreshing at least every 30 minutes.
 - API calls: `Authorization: Bearer <token>`, `Accept: application/hal+json`.
 - 401 = not authenticated; 403 = authenticated but role-based authorization denies.
+- **VERIFIED LIVE (2026-09-21, direct probe with deliberately fake credentials, no doc page):** `POST https://secure-wms.com/AuthServer/api/Token` with Basic credentials that are not registered answers **HTTP 401** with the body `{"Message":"invalid_client: client not registered"}`. That is an ASP.NET `Message` field on a 401 — **not** the OAuth2 `400` + `{"error","error_description"}` shape of RFC 6749 §5.2, which is what `packages/mock-extensiv` emits and what was assumed before this probe. The adapter now reads whichever of `Message`, `error` or `error_description` is present, tolerates a non-JSON body, and bounds and sanitises the text before it reaches a message or a log line. The rejection body for other failure modes (wrong `grant_type`, unknown `user_login`, wrong `tpl`) and the sandbox's rejection shape remain unobserved.
 - Roles (help center): C2CTransfer, CustomerEdit, CustomerNotifyEdit, CustomerNotifyView, CustomerView, FacilityEdit, FacilityView, InventoryDetailView, InventoryEdit, InventoryRead, ItemEdit, ItemView, OrderConfirm, OrderEdit, OrderImport, OrderView, OrderWrite, PoEdit, PoView, ReadPropertiesThirdParty, ReceiverEdit, ReceiverView, WritePropertiesThirdParty.
 - Billboard entry point `/billboard` (HATEOAS; docs say do not hardcode URIs).
 
@@ -105,6 +107,7 @@ ErrorCode values: ModelValidation (400): Required, DoesNotExist, Duplicate, Inco
 - `GET /inventory/receivers/{id}{?detail,itemdetail}` 200 + ETag. `PUT /inventory/receivers/{id}` If-Match; "Updates an unconfirmed receiver".
 - Receiver.readOnly: `receiverId, receiverType, customerIdentifier, facilityIdentifier, creationDate, createdByIdentifier, lastModifiedDate, status (0 Open, 1 Closed, 2 Canceled), chargesPending`.
 - ReceiveItem: `readOnly{receiveItemId, expectedQty, inventoryLevels{onHand, available}, rowVersion}, itemIdentifier{sku,id}, qualifier, qty, lotNumber, serialNumber, expirationDate, cost, locationInfo{locationId, display}, onHold, onHoldReason`.
+- **UNVERIFIED (no live credentials; a GUESS the adapter already acts on):** `ReceiveItem.qty` on a receiver that has **not** arrived is treated as a plan, not an arrival. "Arrived" means `readOnly.status == 1` (Closed) or a stamped `arrivalDate`; a cancelled receiver never counts. Until then the adapter reports `qtyReceived` 0 and a per-line variance of `-qtyExpected`. No rel page says what `qty` means before the confirmer runs, and the opposite reading — `qty` is whatever the warehouse has keyed in so far — would make this UNDER-report a partial receipt. To settle it once credentials exist, fetch, in order: (a) `GET /inventory/receivers/{id}?detail=ReceiveItems` for an **open Receive-Against ASN (receiverType 2) with nothing physically received** and compare `qty`, `readOnly.expectedQty` and `readOnly.inventoryLevels.onHand` against what the UI shows for that receipt; (b) the same fetch for an **open receiver that has been partially received**, if 3PLWM allows keying partial quantities into a receiver without confirming it — if `qty` moves there, the guess is wrong; (c) the same receiver once more after `POST /inventory/receivers/{id}/confirmer`, to see which of the three fields the confirmer moves.
 - Operators: `POST /inventory/receivers/{id}/confirmer` If-Match 204, body `{arrivalDate (not future), trackingNumber, trailerNumber, sealNumber, billOfLading, loadNumber, billing, recalcAutoCharges}`. `POST /inventory/receivers/{id}/canceler` If-Match 204, body `{"reason":"str"(required)}`. INFERRED paths: `/completer`, `/unconfirmer`.
 
 ## 7. Customers, facilities, locations, carriers
@@ -135,6 +138,8 @@ ErrorCode values: ModelValidation (400): Required, DoesNotExist, Duplicate, Inco
 
 ## 10. Gaps
 - 429 / rate-limit behaviour and headers: not documented.
+- What `ReceiveItem.qty` means on a receiver that has not arrived (§6): UNVERIFIED, and the adapter's reading of it is load-bearing for every received-quantity and variance number the server reports.
+- The token endpoint's rejection body is now known for production (§1, VERIFIED LIVE), but only for unregistered Basic credentials; the sandbox's shape and the other failure modes are still unknown.
 - Verbatim `POST /orders` and `PUT /orders/{id}` required-field lists were truncated in the fetch; treat as partly inferred.
 - Sandbox API hostname and credential process: not documented.
 - developer.3plcentral.com Postman collection is unreadable without JS.

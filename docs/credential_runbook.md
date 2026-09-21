@@ -1,6 +1,6 @@
 # Credential runbook for a 3PL admin
 
-Audience: the 3PL Warehouse Manager (3PLWM) administrator who provisions access, and the person who runs the Extensiv MCP server. Every factual statement about Extensiv below carries the help-center or rel-doc URL it came from (collected in `docs/research/help_center_notes.md` and `docs/research/api_reference_notes.md`). Anything marked `ASSUMPTION:` was not stated in those sources and must be confirmed with Extensiv before you rely on it.
+Audience: the 3PL Warehouse Manager (3PLWM) administrator who provisions access, and the person who runs the Extensiv MCP server. Every factual statement about Extensiv below carries the help-center or rel-doc URL it came from (collected in `docs/research/help_center_notes.md` and `docs/research/api_reference_notes.md`). One statement — the shape of a token-endpoint rejection in Step I — comes instead from a live, credential-free probe of the production API, dated where it appears. Anything marked `ASSUMPTION:` was not stated in those sources and must be confirmed with Extensiv before you rely on it.
 
 ---
 
@@ -246,7 +246,7 @@ The integration owner does this after setting the environment variables. The 3PL
 - Writes enabled: `false` for a read-only rollout. If it says `true` and you did not sign the write sign-off, stop and tell the integration owner.
 
 Bad results and what they mean:
-- `401` from the token endpoint: Client ID/Secret wrong, credential not Enabled, or `user_login` wrong (https://3w.extensiv.com/Rels/auth: 401 = not authenticated).
+- `401` from the token endpoint: Client ID/Secret wrong, credential not Enabled, or `user_login` wrong (https://3w.extensiv.com/Rels/auth: 401 = not authenticated). The tool fails with `AUTH_FAILED` and the message now **names the upstream reason**, e.g. `Extensiv rejected the API credentials (HTTP 401, invalid_client: client not registered).` The same rejection is logged to stderr as `{"msg":"extensiv login rejected","status":401,"reason":"invalid_client: client not registered"}`. Two things to know about that text: it is Extensiv's wording, passed through bounded to 160 characters with control characters collapsed and our own secret redacted, so read it as a hint and not as a contract; and the meta key on that log line used to be `error` and is now `reason`, so any operator alert or log search grepping the old key must be switched.
 - `403` on a specific call: a role is missing on the credential (403 = authenticated but role-based authorization denies). Compare against the role set in Step B.
 - Zero customers visible: the customer user (Step A) is not assigned to the customer, or the credential's Customer ID (Step B) does not match the grid.
 
@@ -290,6 +290,14 @@ scope         :
 ```
 
 Request/response shape source: https://3w.extensiv.com/Rels/auth and https://help.extensiv.com/en_US/rest-api/providing-rest-api-access. Never paste the printed token anywhere; it is a bearer credential for up to an hour.
+
+What a **rejection** looks like: production answers **HTTP 401 with an ASP.NET `Message` field**, not the OAuth2 `400` + `{"error","error_description"}` shape:
+
+```
+{"Message":"invalid_client: client not registered"}
+```
+
+Source: a credential-free probe of `POST https://secure-wms.com/AuthServer/api/Token` with deliberately fake credentials, run on 2026-09-21. No help-center or rel page documents the failure body, so this observation is the only source for it. The server reads the reason from whichever of `Message`, `error` or `error_description` is present, so a sandbox or AuthServer build that still emits the OAuth2 shape is handled too. ASSUMPTION: that `invalid_client` here means the Client ID/Secret pair is unknown or not Enabled rather than the `user_login` being wrong; the probe used fake values for all three, so it cannot separate them. Confirm against a real credential.
 
 ### Step J. Contacts
 

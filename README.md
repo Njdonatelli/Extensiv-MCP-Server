@@ -4,7 +4,7 @@ An installable MCP server that exposes [Extensiv 3PL Warehouse Manager](https://
 
 It is built on a reusable, WMS-agnostic core, so a second warehouse system means one new adapter package rather than a rewrite.
 
-> **Status:** verified end to end against a local mock of the Extensiv REST API written from the public documentation. It has **not** been run against real Extensiv credentials. See [`docs/verification_status.md`](docs/verification_status.md) for exactly what is proven and what waits on credentials, and [`packages/mock-extensiv/MOCK_FIDELITY.md`](packages/mock-extensiv/MOCK_FIDELITY.md) for every mocked behaviour with its doc source. 324 tests pass across the workspace; 32 mocked behaviours are flagged as outright guesses and 12 as inferred.
+> **Status:** verified end to end against a local mock of the Extensiv REST API written from the public documentation. It has **not** been run against real Extensiv credentials; the only contact with the real API is a credential-free probe of the production token endpoint on 2026-09-21, which is what the adapter's authentication-failure message is now written against. See [`docs/verification_status.md`](docs/verification_status.md) for exactly what is proven and what waits on credentials, and [`packages/mock-extensiv/MOCK_FIDELITY.md`](packages/mock-extensiv/MOCK_FIDELITY.md) for every mocked behaviour with its doc source. 405 tests in 29 test files pass across the workspace. Of the 161 mocked behaviours carrying a fidelity status, 128 carry a single label (84 Documented, 11 Inferred, 33 Guess) and 33 are deliberately compound — part documented, part reconstructed — because the docs pin the shape but not the values. Reproduce those figures with `python3 scripts/count_fidelity.py`.
 
 ## Packages
 
@@ -25,14 +25,20 @@ Write tools (registered **only** when writes are enabled): `create_order`, `upda
 
 Shipping and confirming orders, confirming receipts, releasing holds and adjusting inventory are deliberately not exposed. See [`docs/architecture.md`](docs/architecture.md) for what each tool answers and the full mutation lifecycle.
 
+**Date arguments are strict ISO-8601.** Every date argument — `create_order`/`update_order` `earliest_ship_date`, `create_receipt` `expected_date` and per-line `expirationDate`, `find_orders` `created_after`/`created_before`/`shipped_after`/`shipped_before`, `find_receipts` `expected_after`/`expected_before`/`created_after`, `operations_summary` `day`, `recent_events` `since` — accepts a date (`2026-09-16`) or a date-time with optional seconds, optional fractional seconds and an optional `Z` or numeric offset (`2026-09-16T00:00:00Z`). A partial date (`2026`, `2026-09`), the US-style `09/16/2026` and relative words (`today`, `yesterday`) are now rejected with a validation error naming the field and the accepted format. The rule is expressed as a schema `pattern`, so the model sees it in the tool definition rather than only on failure — but a saved prompt or a caller that used to pass `today` must resolve the calendar date itself.
+
+**A receipt reports received quantities only once the record says the goods arrived** — the receiver is Closed, or it carries a stamped arrival date. Until then `get_receipt_status` returns `arrived: false`, every line's `qtyReceived` is 0, `totalReceivedQty` is 0, `varianceLines` is 0 with no variances, each line's variance is the quantity still outstanding, and an `outstandingNote` says in a sentence that nothing has landed so no line can be short. So an open ASN no longer answers "what was short on the last delivery?". A cancelled receiver never reports received quantities. **This rests on a guess about the real API, made without live credentials:** that `ReceiveItem.qty` on an un-arrived receiver is a plan rather than an arrival. It must be re-checked the moment real Extensiv credentials exist — if 3PLWM does let a warehouse key partial quantities into an open receiver, these numbers under-report them.
+
 ## Install and run
 
-Requires Node 20 or newer (developed on 22) and pnpm 10.
+Requires Node 20 or newer (developed on 22) and pnpm 10; all five publishable packages declare `engines: { "node": ">=20" }`.
 
 ```bash
 pnpm install
 pnpm build
 ```
+
+Build first. A freshly cloned repo has no `dist/`, and `pnpm build` is what produces `packages/server/dist/cli.js` and marks it executable, so it can then be run either as `node packages/server/dist/cli.js` or directly. Every command and every MCP-client path below assumes the build has run.
 
 Start against the local mock, in one shell (Bash/Zsh):
 
@@ -112,10 +118,17 @@ Nothing in the server writes to stdout except the MCP protocol itself; all loggi
 | `EXTENSIV_MCP_EVENTS_FILE` | `${stateDir}/events.jsonl` | Shared with the webhook-ingest process. |
 | `EXTENSIV_MCP_AUDIT_FILE` | `${stateDir}/audit.jsonl` | Append-only audit log. |
 | `EXTENSIV_MCP_TRANSPORT` | `stdio` | `stdio` or `http`. |
-| `EXTENSIV_MCP_HTTP_HOST` | `127.0.0.1` | Streamable HTTP bind host. |
+| `EXTENSIV_MCP_HTTP_HOST` | `127.0.0.1` | Streamable HTTP bind host. Anything other than loopback is **refused** unless `EXTENSIV_MCP_HTTP_ALLOW_REMOTE=true`. |
 | `EXTENSIV_MCP_HTTP_PORT` | `3333` | Streamable HTTP port. |
+| `EXTENSIV_MCP_HTTP_ALLOW_REMOTE` | `false` | Accept the exposure of binding the unauthenticated HTTP endpoint off loopback. Read the warning below before setting it. |
+| `EXTENSIV_MCP_HTTP_SESSION_IDLE_SECONDS` | `900` | An HTTP session idle this long is closed and the client must re-initialize. A session holding an open `GET /mcp` notification stream is not swept while that stream is open. |
+| `EXTENSIV_MCP_HTTP_MAX_SESSIONS` | `64` | Cap on concurrent HTTP sessions. At the cap a new `initialize` gets HTTP 503 and JSON-RPC `-32000` naming this variable; a live session is never evicted to make room. |
 | `EXTENSIV_MCP_LOG_LEVEL` | `info` | `silent`, `error`, `warn`, `info`, `debug`. Logs go to stderr. |
 | `EXTENSIV_MCP_ENVIRONMENT_LABEL` | detected | Overrides the label shown on every write preview. |
+
+The last three HTTP values are read by the HTTP transport itself rather than by the core config schema, so they are **not** listed by `--print-config`. An unusable value is a startup error: `Invalid HTTP transport configuration: <VARIABLE>: <issue>`.
+
+> **The Streamable HTTP endpoint has no authentication of any kind.** Anything that can reach the host and port gets every registered read tool, and every write tool if writes are enabled. It binds to `127.0.0.1` by default, and a non-loopback bind (`0.0.0.0`, a LAN address, a container's external interface) is now **refused at startup** unless `EXTENSIV_MCP_HTTP_ALLOW_REMOTE=true`. This is a breaking change: an existing `0.0.0.0` deployment will not start until it is either moved back to loopback or opted in deliberately. Prefer an authenticating reverse proxy in front of a loopback bind, or an SSH tunnel; set `EXTENSIV_MCP_HTTP_ALLOW_REMOTE=true` only when something else is doing the authenticating. A failed bind now logs host, port, code, errno and syscall and exits non-zero, instead of announcing that it is listening and exiting 0 with nothing bound; and a malformed JSON body gets a JSON-RPC `-32700` as `application/json`, instead of an HTML stack trace carrying on-disk paths to an unauthenticated caller.
 
 ### Webhook ingest (separate process)
 
@@ -149,7 +162,7 @@ Before enabling writes in production, fill in [`docs/production_write_signoff.md
 
 ```bash
 pnpm install
-pnpm build          # tsc -b across packages
+pnpm build          # per-package build: tsc -b, plus chmod +x on the server CLI
 pnpm test           # vitest, whole workspace
 pnpm typecheck      # tsc -b at the root
 pnpm mock           # start the mock API

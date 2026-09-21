@@ -32,14 +32,14 @@ behaviour — fix both.
 | `user_login_id` accepted as an alias for `user_login` | `POST /AuthServer/api/Token` | — | **Guess** | This spelling appears in neither source. Drop the tolerance once the real endpoint is exercised. |
 | 200 body `{access_token, token_type:"Bearer", expires_in, refresh_token:null, scope:null}`, `application/json; charset=utf-8` | `POST /AuthServer/api/Token` | https://3w.extensiv.com/Rels/auth | Documented | — |
 | `expires_in` = 3600 by default | `POST /AuthServer/api/Token` | https://3w.extensiv.com/Rels/auth (sample) ; help center "typically between 30 and 60 minutes" | Inferred | The real TTL varies per tenant. Override with `tokenTtlSeconds`. |
-| Bad Basic credentials → `401 {"error":"invalid_client"}` | `POST /AuthServer/api/Token` | RFC 6749 §5.2 | **Guess** | The real failure body is documented nowhere. Capture a real 401 before parsing it. |
+| Bad Basic credentials → `401 {"error":"invalid_client"}` | `POST /AuthServer/api/Token` | RFC 6749 §5.2 | **Guess** | The real failure body is documented nowhere, and this one is now known to be **wrong for production**: a live probe on 2026-09-21 got `401 {"Message":"invalid_client: client not registered"}` — an ASP.NET `Message`, not the RFC pair (`docs/research/api_reference_notes.md` §1). The status code matches; the body shape does not. The mock still emits the RFC shape, so the adapter reads `Message`, `error` and `error_description` alike. |
 | Wrong `grant_type` → `400 {"error":"unsupported_grant_type"}` | `POST /AuthServer/api/Token` | RFC 6749 §5.2 | **Guess** | Same. |
 | Missing `user_login` → `400 {"error":"invalid_request"}`; unknown `user_login` → `401 invalid_client`; wrong `tpl` → `400 invalid_request` | `POST /AuthServer/api/Token` | — | **Guess** | Same. |
 | Access token is opaque; clients must not parse it | every call | https://3w.extensiv.com/Rels/auth | Documented | The real token looks like a JWT. Nothing may depend on that. |
 | `Authorization: Bearer <token>` on every non-token call | all | https://3w.extensiv.com/Rels/auth | Documented | — |
 | Missing / invalid / expired bearer → `401` | all | https://3w.extensiv.com/Rels/exceptions ("Missing Authorization header with proper bearer token") | Documented | — |
 | The `401` body is empty | all | — | **Guess** | Rels/exceptions gives no body for 401. Do not build error handling on an empty body. |
-| `GET /events/webhook/key` also requires a bearer | `GET /events/webhook/key` | — | **Guess** | The help center gives the URL with no auth note. A standalone webhook receiver may well be able to fetch it anonymously; check before assuming a receiver needs API credentials. |
+| `GET /events/webhook/key` is served **without** a bearer; every other route is bearer-gated | `GET /events/webhook/key` | — | **Guess** | The help center gives the URL with no auth note. The mock serves the key anonymously because a standalone receiver has to bootstrap trust before it holds any credential — gating it meant the shipped webhook-ingest CLI, pointed at the shipped mock with default config, 401'd on the key fetch and rejected every genuinely signed delivery. Whether the real endpoint is open is still unconfirmed; check before assuming a receiver needs no API credentials. |
 | Role-based `403` (OrderConfirm, ReceiverEdit, …) | all | https://3w.extensiv.com/Rels/auth ; https://help.extensiv.com/en_US/rest-api/getting-started-with-credential-management | Documented, **not implemented** | The mock grants every role. Role denial is a real 403 the mock will never produce. |
 
 ## 2. Headers, media types, ETag / If-Match
@@ -198,6 +198,7 @@ behaviour — fix both.
 | The help centre says holding is impossible once a tracking number or ship date exists | orderholder | https://help.extensiv.com/en_US/order-management/putting-orders-on-hold-in-3pl-warehouse-manager | Documented, **not implemented** | The mock only refuses to hold a non-Open order. |
 | `POST /inventory/receivers` → `201` + ETag; required `customerIdentifier`, `facilityIdentifier`, `referenceNum`, `receiveItems[]` | `POST /inventory/receivers` | https://3w.extensiv.com/rels/inventory/receivers | Documented | — |
 | A customer configured for Receive Against gets `receiverType 2` (ASN) | `POST /inventory/receivers` | https://3w.extensiv.com/rels/inventory/receivers ; customer `options.receiving.receiveAgainstAsns` | Documented | — |
+| `createReceiver` stores the submitted `qty` as the receive item's `qty` on an **Open** receiver, defaults `readOnly.expectedQty` to that same value and sets `readOnly.inventoryLevels` to `{onHand: 0, available: 0}` until the confirmer runs | `POST /inventory/receivers` | — | **Guess** | This split between "planned" and "on hand" on an un-arrived receiver is the mock's own reconstruction, not ground truth: no rel page says what `qty` means before the confirmer runs. The adapter now deliberately declines to read `qty` as a *received* quantity unless the receiver is Closed or carries an `arrivalDate`, so a mock ASN due tomorrow reports nothing received (`docs/research/api_reference_notes.md` §6, marked UNVERIFIED there). If real 3PLWM lets a warehouse key partial quantities into an open receiver, both the mock's shape and that adapter reading are wrong. |
 | Duplicate receiver `referenceNum` → `400 Duplicate` | `POST /inventory/receivers` | — | **Guess** | The receivers rel only says `referenceNum` is required. The mock mirrors the order rule. |
 | `PUT /inventory/receivers/{id}` "Updates an unconfirmed receiver"; `If-Match`; `200` + ETag | `PUT /inventory/receivers/{id}` | https://3w.extensiv.com/rels/inventory/receiver | Documented | — |
 | `POST /inventory/receivers/{id}/confirmer` — `If-Match`, `204`; `arrivalDate` must not be in the future | confirmer | https://3w.extensiv.com/rels/inventory/receiverconfirm | Documented | — |
@@ -309,3 +310,8 @@ from both the bearer middleware and the fault middleware.
 14. **Timestamps are UTC rendered without an offset.** Whether the real API means UTC or
     warehouse-local time is not documented — this is the single most likely source of a silent
     off-by-hours bug when moving from the mock to a sandbox.
+15. **The token-rejection body is the wrong shape.** The mock emits the RFC 6749 §5.2
+    `{"error", "error_description"}` pair; production was observed on 2026-09-21 answering
+    `401 {"Message":"invalid_client: client not registered"}` for unregistered Basic credentials.
+    The status code matches, the body does not, so a client that parses only `error` will read
+    nothing from a real rejection.
