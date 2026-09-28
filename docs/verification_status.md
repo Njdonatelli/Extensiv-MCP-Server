@@ -6,7 +6,7 @@ What is actually proven about this server, and what is still waiting on real Ext
 
 | | |
 |---|---|
-| Verified on | branch `claude/extensiv-3pl-mcp-server-fap4kz`, at its tip. Re-run `bash scripts/verify.sh` to reproduce every number in this table. |
+| Verified on | branch `main`, at its tip. Re-run `bash scripts/verify.sh` to reproduce every number in this table. |
 | Test suite | 405 tests in 29 files, all passing (`npx vitest run`) |
 | By package | mock-extensiv 135, adapter-extensiv 105, core 103, server 49 (integration, attacks and transport hardening), webhook-ingest 7, evals 6 |
 | Typecheck and build | `npx tsc -b tsconfig.json` and `pnpm -r --filter './packages/*' run build` both clean |
