@@ -5,6 +5,7 @@
  * "Properties not supported: <name>" NotParsable hint (SOURCE: https://3w.extensiv.com/Rels/exceptions).
  */
 import { queryParameter, type ApiError } from './errors.js';
+import { parseWireMs } from './util.js';
 
 export type LeafType = 'string' | 'number' | 'bool' | 'date';
 /** Nested description of which dotted property paths a rel supports and their types. */
@@ -219,7 +220,7 @@ function coerce(type: LeafType, raw: string): number | boolean | string | null {
       return l === 'true' ? true : l === 'false' ? false : null;
     }
     case 'date': {
-      const t = Date.parse(raw);
+      const t = parseWireMs(raw);
       return Number.isNaN(t) ? null : t;
     }
     default:
@@ -230,7 +231,7 @@ function coerce(type: LeafType, raw: string): number | boolean | string | null {
 function rowValue(type: LeafType, v: unknown): number | boolean | string | null {
   if (v === null || v === undefined) return null;
   if (type === 'date') {
-    const t = typeof v === 'string' ? Date.parse(v) : Number.NaN;
+    const t = typeof v === 'string' ? parseWireMs(v) : Number.NaN;
     return Number.isNaN(t) ? null : t;
   }
   if (type === 'number') return typeof v === 'number' ? v : Number(v);

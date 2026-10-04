@@ -1,5 +1,6 @@
 import * as z from 'zod/v4';
 import type { OrderSummary, ReceiptSummary } from '../domain.js';
+import { parseTimestamp } from '../clock.js';
 import { WmsError } from '../errors.js';
 import { common, defineTool, resolveCustomerRef, resolveFacilityRef, type ToolContext } from './define.js';
 
@@ -190,11 +191,11 @@ export const findStuckOrders = defineTool({
     const groups: Record<string, { order: OrderSummary; reason: string }[]> = { short: [], on_hold: [], aging: [], past_ship_date: [], in_progress_stalled: [] };
     for (const o of page.items) {
       if (!ctx.policy.canReadCustomer(o.customer.id)) continue;
-      const ageDays = (now - Date.parse(o.createdAt)) / 86_400_000;
+      const ageDays = (now - parseTimestamp(o.createdAt)) / 86_400_000;
       if (o.fullyAllocated === false) groups.short!.push({ order: o, reason: 'not fully allocated: inventory short for at least one line' });
       if (o.onHold) groups.on_hold!.push({ order: o, reason: `on hold${o.holdReason ? `: ${o.holdReason}` : ''}` });
       if (ageDays > input.max_age_days) groups.aging!.push({ order: o, reason: `open for ${ageDays.toFixed(1)} days` });
-      if (o.earliestShipDate && Date.parse(o.earliestShipDate) < now) groups.past_ship_date!.push({ order: o, reason: `earliest ship date ${o.earliestShipDate} has passed` });
+      if (o.earliestShipDate && parseTimestamp(o.earliestShipDate) < now) groups.past_ship_date!.push({ order: o, reason: `earliest ship date ${o.earliestShipDate} has passed` });
       // Only an order whose pick or pack actually STARTED can be stalled. Keying off
       // "not done" alone flagged every fully-allocated order that simply had not begun.
       if (o.pickStarted && !o.pickDone) groups.in_progress_stalled!.push({ order: o, reason: 'picking started but not finished' });
@@ -424,7 +425,7 @@ export const operationsSummary = defineTool({
         openBacklog: ctx.policy.readCustomerFilter() === undefined ? open.total : openOrders.length,
         openOnHold: openOrders.filter((o) => o.onHold).length,
         openShort: openOrders.filter((o) => o.fullyAllocated === false).length,
-        openPastShipDate: openOrders.filter((o) => o.earliestShipDate && Date.parse(o.earliestShipDate) < ctx.clock.now().getTime()).length,
+        openPastShipDate: openOrders.filter((o) => o.earliestShipDate && parseTimestamp(o.earliestShipDate) < ctx.clock.now().getTime()).length,
       },
       receipts: {
         expectedToday: readable(receiptsExpected).length,

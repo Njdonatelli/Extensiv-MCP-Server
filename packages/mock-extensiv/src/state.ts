@@ -35,7 +35,7 @@ import {
   type StockDetailRow,
   type StockSummary,
 } from './models.js';
-import { addDays, ci, clone, etagFor, isBlank, parseCommaList, parseDate, rowVersionString, wireDate } from './util.js';
+import { addDays, ci, clone, etagFor, isBlank, parseCommaList, parseDate, parseWireMs, rowVersionString, wireDate } from './util.js';
 import { WebhookDispatcher, type EmitInput, type WebhookDelivery, type WebhookOptions } from './webhooks.js';
 
 export interface MockCredentials {
@@ -645,7 +645,7 @@ export class MockState {
         onHandQty: lot.onHand,
         availableQty: lot.available,
         onHoldQty: lot.onHold,
-        inventoryAgeDays: Math.max(0, Math.floor((now.getTime() - Date.parse(`${lot.receivedDate}Z`)) / 86_400_000)),
+        inventoryAgeDays: Math.max(0, Math.floor((now.getTime() - parseWireMs(lot.receivedDate)) / 86_400_000)),
         lotNumber: lot.lotNumber,
         serialNumber: lot.serialNumber,
         expirationDate: lot.expirationDate,
@@ -1194,7 +1194,7 @@ export class MockState {
           shipDate: ro.shipDate,
           creationDate: ro.creationDate,
           deliveryDate: null,
-          deliveryDateEstimated: ro.shipDate ? wireDate(addDays(new Date(`${ro.shipDate}Z`), 3)) : null,
+          deliveryDateEstimated: ro.shipDate ? wireDate(addDays(new Date(parseWireMs(ro.shipDate)), 3)) : null,
           isImperial: true,
           error: null,
         });

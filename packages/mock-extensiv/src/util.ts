@@ -15,9 +15,22 @@ export function webhookDate(d: Date): string {
   return d.toISOString().replace(/(\.\d{3})Z$/, '$10000');
 }
 
+const HAS_TIME = /T\d{2}:/;
+const HAS_ZONE = /(?:[zZ]|[+-]\d{2}:?\d{2})$/;
+
+/**
+ * Epoch milliseconds for a wire date, NaN when unparseable. A date-time without a zone is read as
+ * UTC, the inverse of `wireDate`. Plain `Date.parse` reads it as the host's local time, which
+ * shifts every comparison by the host's UTC offset.
+ */
+export function parseWireMs(value: string): number {
+  const v = value.trim();
+  return Date.parse(HAS_TIME.test(v) && !HAS_ZONE.test(v) ? `${v}Z` : v);
+}
+
 export function parseDate(value: unknown): Date | null {
   if (typeof value !== 'string' || value.trim() === '') return null;
-  const t = Date.parse(value);
+  const t = parseWireMs(value);
   return Number.isNaN(t) ? null : new Date(t);
 }
 

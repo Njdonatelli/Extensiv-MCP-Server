@@ -61,7 +61,7 @@ problem instead of failing.
 |---|---|---|
 | `OrderSummary.status` | `readOnly.status` | `0 -> open`, `1 -> closed`, `2 -> cancelled`. The `WarehouseTransactionApiStatus` enum has **no Complete member** ("Mark Complete" is an operator), so the domain's `'complete'` is never produced for Extensiv |
 | `onHold` / `holdReason` | `readOnly.onHoldDate != null` / `readOnly.onHoldReason` | a hold is a date, not a status |
-| `createdAt` / `updatedAt` | `readOnly.creationDate` / `readOnly.lastModifiedDate` | |
+| `createdAt` / `updatedAt` | `readOnly.creationDate` / `readOnly.lastModifiedDate` | passed through as sent, with no zone; core's `parseTimestamp` reads a zoneless date-time as UTC (GUESS: UTC vs warehouse-local is undocumented) |
 | `shippedAt` | `readOnly.shipDate`, else `readOnly.smallParcelShipDate` | small-parcel orders stamp the second field |
 | `trackingNumbers` | `routingInfo.trackingNumber` + `readOnly.packages[].trackingNumber` + `parcelResponse.trackingNumbers[]` | deduped union, order preserved |
 | `carrier` / `service` | `routingInfo.carrier` / `routingInfo.mode` | |

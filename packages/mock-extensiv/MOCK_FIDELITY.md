@@ -55,7 +55,7 @@ behaviour — fix both.
 | Customer ETag derived from `1_000_000 + customerId` | `GET /customers/{id}` | — | **Guess** | A customer carries no `rowVersion` on the wire, so the mock invents a stable one. |
 | Item ETag is the literal `readOnly.rowVersion` in quotes | `GET /customers/{id}/items/{iid}` | https://3w.extensiv.com/rels/customers/item (model has `readOnly.rowVersion`) | Inferred | — |
 | `Cache-Control` on the rels the docs call "cacheable" | `/customers`, `/customers/{id}/items`, `/properties/facilities` | https://3w.extensiv.com/Rels/headers ; each rel page | Documented (cacheability) / **Guess** (`private, max-age=60`) | The real max-age. |
-| Unqualified `.NET` timestamps, `2016-12-25T23:00:00`, no offset, no milliseconds | every date field | every rel-page sample | Documented (shape) / **Guess** (UTC vs warehouse-local) | Whether the real API's unqualified timestamps are UTC or facility-local. The mock renders UTC. |
+| Unqualified `.NET` timestamps, `2016-12-25T23:00:00`, no offset, no milliseconds | every date field | every rel-page sample | Documented (shape) / **Guess** (UTC vs warehouse-local) | Whether the real API's unqualified timestamps are UTC or facility-local. The mock renders UTC and reads a zoneless date-time it receives (`confirmDate`, `arrivalDate`, rql date values) as UTC, whatever the host time zone. |
 
 ## 3. HAL envelopes and rel names
 
@@ -307,9 +307,10 @@ from both the bearer middleware and the fault middleware.
     response carries `_links`, a client that follows `next` will behave differently here.
 13. **Errors carry mock-authored `Hint` text**, and a `500` echoes the internal message. Match on
     `ErrorCode`, never on `Hint`.
-14. **Timestamps are UTC rendered without an offset.** Whether the real API means UTC or
-    warehouse-local time is not documented — this is the single most likely source of a silent
-    off-by-hours bug when moving from the mock to a sandbox.
+14. **Timestamps are UTC rendered without an offset, and parsed the same way.** A date-time with no
+    zone is read as UTC on input too, independent of the host's time zone; an explicit `Z` or offset
+    is honoured. Whether the real API means UTC or warehouse-local time is not documented — this is
+    the single most likely source of a silent off-by-hours bug when moving from the mock to a sandbox.
 15. **The token-rejection body is the wrong shape.** The mock emits the RFC 6749 §5.2
     `{"error", "error_description"}` pair; production was observed on 2026-09-21 answering
     `401 {"Message":"invalid_client: client not registered"}` for unregistered Basic credentials.

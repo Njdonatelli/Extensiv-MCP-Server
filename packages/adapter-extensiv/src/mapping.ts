@@ -27,6 +27,7 @@ import type {
   ReceiptSummary,
   TimelineEvent,
 } from '@mcp-3pl/core';
+import { parseTimestamp } from '@mcp-3pl/core';
 import { REL, embedded, idOf, nameOf, type WireIdentifier } from './hal.js';
 import { WIRE_STATUS } from './wire.js';
 import type {
@@ -222,8 +223,8 @@ const ORDER_TIMELINE: { key: keyof WireOrderReadOnly; event: string }[] = [
 
 function sortTimeline(events: TimelineEvent[]): TimelineEvent[] {
   return events.sort((a, b) => {
-    const ta = Date.parse(a.at);
-    const tb = Date.parse(b.at);
+    const ta = parseTimestamp(a.at);
+    const tb = parseTimestamp(b.at);
     if (Number.isNaN(ta) || Number.isNaN(tb)) return a.at < b.at ? -1 : a.at > b.at ? 1 : 0;
     return ta - tb;
   });
